@@ -3,9 +3,10 @@
 // (see vegaSpecs.ts) — this is the "chart-as-data not chart-as-code" state
 // that persistence, undo, and the WebMCP tools all operate on.
 
-import { PALETTE, BRAND } from './palette';
-import { DEFAULT_FILTERS, type ReportFilters } from './reportFilters';
-import type { Region, Segment } from './types';
+import { PALETTE, BRAND } from './palette.ts';
+import { DEFAULT_FILTERS, type ReportFilters } from './reportFilters.ts';
+import { supabase } from './supabase.ts';
+import type { Region, Segment } from './types.ts';
 
 export type ChartId = 'arr_bridge' | 'retention_nrr' | 'retention_churn';
 export const CHART_IDS: ChartId[] = ['arr_bridge', 'retention_nrr', 'retention_churn'];
@@ -100,8 +101,12 @@ export function validatePatch(chartId: string, patch: unknown): PatchResult {
     if (opt.type === 'enum' && !opt.values.includes(value as string | number)) {
       return { ok: false, reason: 'invalid_value', error: `"${key}" must be one of ${opt.values.join(', ')}, got ${JSON.stringify(value)}.` };
     }
-    if (opt.type === 'range' && (typeof value !== 'number' || value < opt.min || value > opt.max)) {
-      return { ok: false, reason: 'invalid_value', error: `"${key}" must be a number between ${opt.min} and ${opt.max}, got ${JSON.stringify(value)}.` };
+    if (opt.type === 'range') {
+      const steps = (value as number - opt.min) / opt.step;
+      const offStep = typeof value !== 'number' || Number.isNaN(steps) || Math.abs(steps - Math.round(steps)) > 1e-9;
+      if (typeof value !== 'number' || value < opt.min || value > opt.max || offStep) {
+        return { ok: false, reason: 'invalid_value', error: `"${key}" must be a multiple of ${opt.step} between ${opt.min} and ${opt.max}, got ${JSON.stringify(value)}.` };
+      }
     }
   }
   return { ok: true };
@@ -118,41 +123,43 @@ export interface DashboardState {
 
 export const DEFAULT_DASHBOARD_STATE: DashboardState = { charts: DEFAULT_CHART_STATE, filters: DEFAULT_FILTERS };
 
-// ---- localStorage persistence: one snapshot per report id, schema-versioned ----
+// ---- Supabase persistence: one row per report id, schema-versioned, realtime-synced across viewers ----
 
-const SCHEMA_VERSION = 3; // v2 added `filters`; v3 added `filters.accountName` — older snapshots are rejected below, not migrated
+const SCHEMA_VERSION = 4; // v2 added `filters`; v3 added `filters.accountName`; v4 added `filters.channel`/`filters.contractType` — older rows are rejected below, not migrated
 const REPORT_ID = 'northbeam';
 
-interface StoredSnapshot {
-  schemaVersion: number;
-  reportId: string;
-  state: DashboardState;
-  savedAt: string;
+export async function loadDashboardState(reportId: string = REPORT_ID): Promise<DashboardState> {
+  const { data, error } = await supabase
+    .from('dashboard_state')
+    .select('schema_version, state')
+    .eq('report_id', reportId)
+    .maybeSingle();
+  if (error || !data || data.schema_version !== SCHEMA_VERSION) return DEFAULT_DASHBOARD_STATE;
+  return data.state as DashboardState;
 }
 
-function storageKey(reportId: string): string {
-  return `vivid:report:${reportId}`;
+export function saveDashboardState(state: DashboardState, actor: 'person' | 'agent', reportId: string = REPORT_ID): void {
+  supabase
+    .from('dashboard_state')
+    .update({ state, updated_by: actor, updated_at: new Date().toISOString() })
+    .eq('report_id', reportId)
+    .then(({ error }) => {
+      // ponytail: best-effort — a dropped write just means the next edit re-syncs from local state; not load-bearing for the demo
+      if (error) console.error('saveDashboardState failed', error);
+    });
 }
 
-export function loadDashboardState(reportId: string = REPORT_ID): DashboardState {
-  try {
-    const raw = localStorage.getItem(storageKey(reportId));
-    if (!raw) return DEFAULT_DASHBOARD_STATE;
-    const parsed = JSON.parse(raw) as StoredSnapshot;
-    if (parsed.schemaVersion !== SCHEMA_VERSION || parsed.reportId !== reportId) return DEFAULT_DASHBOARD_STATE;
-    return parsed.state;
-  } catch {
-    return DEFAULT_DASHBOARD_STATE;
-  }
-}
-
-export function saveDashboardState(state: DashboardState, reportId: string = REPORT_ID): void {
-  const snapshot: StoredSnapshot = { schemaVersion: SCHEMA_VERSION, reportId, state, savedAt: new Date().toISOString() };
-  try {
-    localStorage.setItem(storageKey(reportId), JSON.stringify(snapshot));
-  } catch {
-    // ponytail: storage can be full/unavailable (private browsing) — persistence is best-effort, not load-bearing
-  }
+// Pushes every remote update (including this client's own, echoed back) — cheap no-op when it matches what's already local.
+export function subscribeDashboardState(onChange: (state: DashboardState) => void, reportId: string = REPORT_ID): () => void {
+  const channel = supabase
+    .channel(`dashboard_state:${reportId}`)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'dashboard_state', filter: `report_id=eq.${reportId}` },
+      (payload) => onChange(payload.new.state as DashboardState),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
 }
 
 export { REPORT_ID };

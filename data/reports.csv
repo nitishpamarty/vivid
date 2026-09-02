@@ -1,0 +1,21 @@
+report_id,name,owner_team,created_month
+REP-001,Pipeline Coverage,Sales,2023-10
+REP-002,Deal Velocity,Marketing,2023-10
+REP-003,Quota Attainment,Customer Success,2023-10
+REP-004,Territory Performance,Finance,2023-10
+REP-005,Campaign ROI,Product,2023-10
+REP-006,Channel Mix,Sales,2023-10
+REP-007,Lead Funnel,Marketing,2023-10
+REP-008,Attribution Overview,Customer Success,2023-10
+REP-009,Renewal Risk,Finance,2025-01
+REP-010,NPS Trend,Product,2025-12
+REP-011,Onboarding Health,Sales,2024-11
+REP-012,Support Load,Marketing,2025-03
+REP-013,Budget vs Actuals,Customer Success,2024-10
+REP-014,Vendor Spend,Finance,2024-08
+REP-015,Headcount Plan,Product,2024-09
+REP-016,Feature Adoption,Sales,2025-11
+REP-017,Release Impact,Marketing,2026-02
+REP-018,API Usage,Customer Success,2025-03
+REP-019,Retention Cohorts,Finance,2025-10
+REP-020,Executive Summary,Product,2025-10

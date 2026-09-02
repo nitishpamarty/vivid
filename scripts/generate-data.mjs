@@ -39,7 +39,19 @@ const PLAN_BY_SEGMENT = {
   'Mid-Market': ['Team', 'Business'],
   Enterprise: ['Business', 'Enterprise'],
 };
-const SEGMENTS = ['SMB', 'Mid-Market', 'Enterprise'];
+const CHANNELS = ['Paid', 'Organic', 'Referral', 'Partner'];
+const CHANNEL_WEIGHTS = { Paid: 0.40, Organic: 0.32, Referral: 0.18, Partner: 0.10 };
+function pickChannel() {
+  const r = rnd();
+  let acc = 0;
+  for (const ch of CHANNELS) { acc += CHANNEL_WEIGHTS[ch]; if (r <= acc) return ch; }
+  return 'Partner';
+}
+// Annual-contract odds rise with segment — bigger accounts skew toward annual commitments.
+function pickContractType(segment) {
+  const annualProb = segment === 'Enterprise' ? 0.85 : segment === 'Mid-Market' ? 0.55 : 0.25;
+  return rnd() < annualProb ? 'Annual' : 'Monthly';
+}
 
 function monthLabel(m) {
   const start = new Date(Date.UTC(2023, 9, 1)); // month 1 = Oct 2023, month 36 = Sep 2026
@@ -120,6 +132,7 @@ function newCustomer(segment, m, opts = {}) {
   const c = {
     id, name: opts.name ?? fillerName(nextId), segment,
     plan: opts.plan ?? pickPlan(segment), region: opts.region ?? pickRegion(),
+    channel: opts.channel ?? pickChannel(), contractType: opts.contractType ?? pickContractType(segment),
     signupMonth: m, churnMonth: null,
     mrr: opts.mrr ?? between(lo, hi),
     driftBonus: opts.driftBonus ?? 0,
@@ -153,7 +166,7 @@ const namedQueue = [...NAMED_SEED];
 for (let m = 1; m <= MONTHS; m++) {
   // ---- churn roll for existing customers (before this month's row) ----
   if (m > 1) {
-    for (const c of [...active]) {
+    for (const c of active) {
       if (c.signupMonth === m) continue;
       if (rnd() < churnProbFor(c.segment, m)) {
         c.churnMonth = m;
@@ -237,11 +250,12 @@ function toCsv(rows, cols) {
 
 const customerRows = customers.map((c) => ({
   customer_id: c.id, name: c.name, segment: c.segment, plan_tier: c.plan,
-  region: c.region, signup_month: monthLabel(c.signupMonth),
+  region: c.region, channel: c.channel, contract_type: c.contractType,
+  signup_month: monthLabel(c.signupMonth),
   churn_month: c.churnMonth ? monthLabel(c.churnMonth) : '',
 }));
 writeFileSync(new URL('customers.csv', OUT_DIR),
-  toCsv(customerRows, ['customer_id', 'name', 'segment', 'plan_tier', 'region', 'signup_month', 'churn_month']));
+  toCsv(customerRows, ['customer_id', 'name', 'segment', 'plan_tier', 'region', 'channel', 'contract_type', 'signup_month', 'churn_month']));
 
 const mrrCsvRows = mrrRows.map((r) => ({
   customer_id: r.customerId, month: r.month, mrr: r.mrr,

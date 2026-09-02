@@ -1,0 +1,212 @@
+[
+  {
+    "weekday": "Mon",
+    "hourBucket": "0-4",
+    "views": 3
+  },
+  {
+    "weekday": "Mon",
+    "hourBucket": "4-8",
+    "views": 9
+  },
+  {
+    "weekday": "Mon",
+    "hourBucket": "8-12",
+    "views": 31
+  },
+  {
+    "weekday": "Mon",
+    "hourBucket": "12-16",
+    "views": 77
+  },
+  {
+    "weekday": "Mon",
+    "hourBucket": "16-20",
+    "views": 45
+  },
+  {
+    "weekday": "Mon",
+    "hourBucket": "20-24",
+    "views": 7
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "0-4",
+    "views": 3
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "4-8",
+    "views": 16
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "8-12",
+    "views": 73
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "12-16",
+    "views": 85
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "16-20",
+    "views": 28
+  },
+  {
+    "weekday": "Tue",
+    "hourBucket": "20-24",
+    "views": 10
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "0-4",
+    "views": 2
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "4-8",
+    "views": 15
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "8-12",
+    "views": 56
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "12-16",
+    "views": 92
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "16-20",
+    "views": 46
+  },
+  {
+    "weekday": "Wed",
+    "hourBucket": "20-24",
+    "views": 13
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "0-4",
+    "views": 2
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "4-8",
+    "views": 8
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "8-12",
+    "views": 43
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "12-16",
+    "views": 53
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "16-20",
+    "views": 50
+  },
+  {
+    "weekday": "Thu",
+    "hourBucket": "20-24",
+    "views": 10
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "0-4",
+    "views": 2
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "4-8",
+    "views": 13
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "8-12",
+    "views": 58
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "12-16",
+    "views": 51
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "16-20",
+    "views": 56
+  },
+  {
+    "weekday": "Fri",
+    "hourBucket": "20-24",
+    "views": 11
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "0-4",
+    "views": 0
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "4-8",
+    "views": 2
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "8-12",
+    "views": 11
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "12-16",
+    "views": 11
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "16-20",
+    "views": 7
+  },
+  {
+    "weekday": "Sat",
+    "hourBucket": "20-24",
+    "views": 2
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "0-4",
+    "views": 1
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "4-8",
+    "views": 2
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "8-12",
+    "views": 9
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "12-16",
+    "views": 10
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "16-20",
+    "views": 10
+  },
+  {
+    "weekday": "Sun",
+    "hourBucket": "20-24",
+    "views": 3
+  }
+]

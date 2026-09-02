@@ -1,4 +1,4 @@
-import type { NorthbeamData, Region, Segment } from './types';
+import type { AcquisitionChannel, NorthbeamData, Region, Segment } from './types';
 
 // All months present in the dataset, sorted ascending (YYYY-MM sorts lexically).
 export function monthList(data: NorthbeamData): string[] {
@@ -53,6 +53,17 @@ export function arrMixBySegment(data: NorthbeamData, month: string): Record<Segm
     if (r.month !== month) continue;
     const seg = custById.get(r.customerId)?.segment;
     if (seg) mix[seg] += r.mrr * 12;
+  }
+  return mix;
+}
+
+export function arrMixByChannel(data: NorthbeamData, month: string): Record<AcquisitionChannel, number> {
+  const mix: Record<AcquisitionChannel, number> = { Paid: 0, Organic: 0, Referral: 0, Partner: 0 };
+  const custById = new Map(data.customers.map((c) => [c.customerId, c]));
+  for (const r of data.mrrRows) {
+    if (r.month !== month) continue;
+    const ch = custById.get(r.customerId)?.channel;
+    if (ch) mix[ch] += r.mrr * 12;
   }
   return mix;
 }
@@ -132,7 +143,7 @@ export function computeKpis(data: NorthbeamData) {
   const cacByMonth = new Map(data.cac.map((c) => [c.month, c.cac]));
   const cac = cacByMonth.get(latest) ?? 0;
   const cacQuarterAgo = cacByMonth.get(months[latestIdx - 3]) ?? cac;
-  const cacGrowthQoQ = ((cac - cacQuarterAgo) / cacQuarterAgo) * 100;
+  const cacGrowthQoQ = cacQuarterAgo === 0 ? 0 : ((cac - cacQuarterAgo) / cacQuarterAgo) * 100; // a filter combo can genuinely zero this out
   const cacSpark = months.slice(-8).map((m) => cacByMonth.get(m) ?? 0);
 
   return {

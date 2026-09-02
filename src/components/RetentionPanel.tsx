@@ -23,7 +23,7 @@ export function RetentionPanel({ nrrMonths, nrrSeries, churnMonths, churnSeries,
         <div>
           <div className="mini-head">
             <span className="t">Net revenue retention</span>
-            <span className="v">{nrrSeries[nrrSeries.length - 1].toFixed(0)}%</span>
+            <span className="v">{Number.isNaN(nrrSeries[nrrSeries.length - 1]) ? 'No data' : `${nrrSeries[nrrSeries.length - 1].toFixed(0)}%`}</span>
           </div>
           <VegaLiteChart spec={nrrSpec} className="mini-chart" />
         </div>

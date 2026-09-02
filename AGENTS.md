@@ -61,14 +61,22 @@ more than one.
     for how the registration path was verified without a WebMCP-capable
     browser (a devtools-injected `document.modelContext` polyfill, driving
     the real `registerTool` execute functions).
-- **Persistence (Phase 2, built):** one whole-dashboard JSON snapshot per
-  report id (`DashboardState` = chart knobs + filters, see
-  [src/lib/chartState.ts](src/lib/chartState.ts)), written to localStorage
-  on every successful mutating tool call, read back on load with a schema
-  version check (an unrecognized version falls back to defaults rather
-  than trusting stale shape — bumped to v2 when Phase 3 added `filters` to
-  the snapshot, then v3 when `accountName` was added to `filters`; an
-  older snapshot is correctly discarded, not migrated).
+- **Persistence (Phase 2, built; moved to Supabase since):** one
+  whole-dashboard JSON snapshot per report id (`DashboardState` = chart
+  knobs + filters, see [src/lib/chartState.ts](src/lib/chartState.ts)),
+  written on every successful mutating tool call, read back on load with a
+  schema version check (an unrecognized version falls back to defaults
+  rather than trusting stale shape — bumped to v2 when Phase 3 added
+  `filters` to the snapshot, then v3 when `accountName` was added to
+  `filters`; an older row is correctly discarded, not migrated). Originally
+  localStorage (per-browser only); now a single `dashboard_state` row in
+  Supabase Postgres, pushed to every open viewer over Supabase Realtime
+  (`subscribeDashboardState`) — this is what actually makes edits shared
+  across a presenter's screen and a separate viewer, not just persisted
+  within one browser. The Activity log (below) moved the same way, see
+  [src/lib/activityLog.ts](src/lib/activityLog.ts). Last-write-wins at the
+  row level; no multi-editor conflict resolution, since the app's own usage
+  pattern is one driver (person or agent) at a time.
 - **Undo (Phase 2, built):** the last ~10 snapshots kept in an array
   alongside the current one; undo pops the stack. Single stack, no
   branching redo, and it covers filter changes too — one undo after an
@@ -81,16 +89,26 @@ more than one.
   simulated/predicted call. This is the trust mechanism for the live-call
   scenario.
 - **Functional filters + cross-filtering (Phase 3, built —
-  [src/lib/reportFilters.ts](src/lib/reportFilters.ts)):** four
-  report-wide filters (`segment`, `region`, `planTier`, `accountName`),
-  settable by either a person or the agent, that subset the underlying
-  customer/mrr rows feeding all six panels — not just the two
-  agent-editable charts.
-  - `segment`/`region`/`planTier` are small closed enums — the topbar's
-    three `<select>` dropdowns (native elements, not custom pickers — a
-    "clear" is just picking "All ..."), or clicking a segment in the
-    ARR-mix donut / a region row in the net-new-logos heatmap (clicking
-    the already-active one toggles back to "all").
+  [src/lib/reportFilters.ts](src/lib/reportFilters.ts); `channel`/
+  `contractType` added afterward, on explicit direction):** six
+  report-wide filters (`segment`, `region`, `planTier`, `channel`,
+  `contractType`, `accountName`), settable by either a person or the
+  agent, that subset the underlying customer/mrr rows feeding all six
+  panels — not just the two agent-editable charts.
+  - `segment`/`region`/`planTier`/`contractType` are small closed enums —
+    four of the topbar's `<select>` dropdowns (native elements, not
+    custom pickers — a "clear" is just picking "All ..."), or clicking a
+    region row in the net-new-logos heatmap (clicking the already-active
+    one toggles back to "all").
+  - `channel` is also a closed enum but has **no dropdown** — it's set
+    only by clicking a slice of the ARR-mix donut (same toggle-off
+    pattern), the same click-only shape as `accountName`/Top Accounts.
+    This is deliberate: the donut's dimension used to be `segment`, which
+    sat right next to `segment`'s own filter dropdown and read as
+    redundant. Swapping the donut to `channel` — a dimension with no
+    dropdown twin — and moving `segment` off to dropdown-only fixed
+    that, without touching `region` (which still doubles with the
+    heatmap; only the donut/dropdown pairing was reported as confusing).
   - `accountName` is free text (any customer name, not a closed enum),
     set by clicking a row in Top Accounts (toggle-off the same way) — a
     single-account drill-down, not a category cross-filter. Top Accounts
@@ -128,7 +146,7 @@ more than one.
 `data/` contains:
 
 - `customers.csv`: `customer_id`, `name`, `segment`, `plan_tier`, `region`,
-  `signup_month`, `churn_month`
+  `channel`, `contract_type`, `signup_month`, `churn_month`
 - `mrr_monthly.csv`: `customer_id`, `month`, `mrr`, `is_new`,
   `is_expansion`, `is_contraction`, `is_churned`
 - `cac_monthly.json`: `{ month, cac }[]` — blended CAC has no source columns
@@ -175,6 +193,10 @@ Enums:
 - `segment`: SMB | Mid-Market | Enterprise
 - `plan_tier`: Starter | Team | Business | Enterprise
 - `region`: NA | EMEA | APAC | LATAM
+- `channel`: Paid | Organic | Referral | Partner — weighted pick per
+  customer (40/32/18/10%), independent of segment
+- `contract_type`: Monthly | Annual — Annual odds rise with segment
+  (25% SMB, 55% Mid-Market, 85% Enterprise), same pattern as `pickPlan`
 
 36 months of history (month 1 = Oct 2023, month 36 = Sep 2026). Segment mix
 shifts upmarket over time both by new-signup weighting and by Enterprise's
@@ -215,6 +237,47 @@ at month 36: Enterprise 43%, Mid-Market 35%, SMB 22%.
 
 </details>
 
+## Data spec — People report (generated — `scripts/generate-people-data.mjs`)
+
+`data/employees.csv`: `employee_id`, `department`, `region`, `hire_month`,
+`term_month`. One row per employee (a roster, not a monthly time series like
+`mrr_monthly.csv`) — the month axis (`monthList` in
+[src/lib/peopleMetrics.ts](src/lib/peopleMetrics.ts)) is derived from the
+min/max of `hire_month`/`term_month` rather than hardcoded, so it's not
+tied to the Revenue report's Oct 2023–Sep 2026 window by anything other
+than both generators happening to start their simulation the same month.
+
+Bottom-up monthly simulation like `generate-data.mjs`: 28 employees seeded
+month 1, each month an independent attrition roll (~1.45%/mo base rate) and
+a hiring batch sized off a decelerating growth curve (~7%/mo early to
+~3.5%/mo late). No pricing-change-style event — steady growth/attrition
+only. Lands around 85–95 active headcount by month 36 out of a ~110-120
+total-ever-hired roster; the generator's self-check asserts a plausible
+range, not an exact anchor (same philosophy as `generate-data.mjs`'s
+post-rescale-removal version).
+
+`department` (`Engineering | Sales | Customer Success | Marketing | Product
+| People | Finance`) and `region` (reuses the Revenue report's `NA | EMEA |
+APAC | LATAM` enum) are the only breakdown dimensions — no `level` or
+`employment_type` field, since nothing in the People report's five panels
+needed one (ponytail: don't generate a column with no consumer).
+
+## Data spec — Product Usage report (generated — `scripts/generate-usage-data.mjs`)
+
+- `data/reports.csv`: `report_id`, `name`, `owner_team`, `created_month` —
+  20 fictional saved reports (e.g. "Pipeline Coverage", "Renewal Risk"),
+  each owned by one of five teams, created at a random month 1–30.
+- `data/report_views_monthly.csv`: `report_id`, `month`, `views`,
+  `unique_viewers`, `engagement_score` — one row per report per month from
+  its `created_month` through month 36, a per-report random walk in views
+  with `unique_viewers` and `engagement_score` derived from it.
+- `data/activity_heatmap.json`: `{ weekday, hourBucket, views }[]` — a
+  synthetic, business-hours-weighted weekday × 6-hour-bucket activity
+  pattern. This is deliberately **not** tied to `report_views_monthly.csv`
+  or to a specific date range — it's an aggregate "typical week" shape (like
+  the Tableau Server Content Analytics inspiration's calendar heatmap),
+  not a per-report or per-date breakdown.
+
 ## Explicit scope
 
 **Built (Phase 1):** the six-panel Northbeam dashboard rendering from real
@@ -232,15 +295,33 @@ heatmap), cross-filtering all six panels; the `set_report_filters` WebMCP
 tool so the agent can set the same filters; undo/persistence extended to
 cover filter state alongside chart knobs.
 
+**Built (second/third reports, on explicit direction):** a People report
+and a Product Usage report, alongside the original Revenue report, switched
+via tabs in the topbar (`src/components/Topbar.tsx`'s `ReportId`). This is
+the "new decision" the deferred-scope note below used to require — see the
+data spec section for what each report covers. Both new reports are
+**static/non-interactive**: no WebMCP tools, no filters, no undo/persistence
+— that boundary hasn't moved, only the "how many reports" one has. Adding
+either report is what justified generalizing four of the Revenue report's
+hand-rolled display components into reusable primitives (`Donut`,
+`RankedBarList`, `Heatmap`, `Histogram` — each now has ≥2 real call sites,
+not a speculative one); `ArrMixDonut`/`TopAccounts`/`NewLogosHeatmap` are now
+thin typed wrappers around them so the Revenue report's props/behavior are
+unchanged. `KpiRow.tsx` also now exports `KpiCard` itself so the new reports
+can build their own KPI rows with the same card look.
+
 **Explicitly deferred, do not build without a new decision:**
-- a second dataset or second report
-- any general-purpose report abstraction beyond what one report needs
-- letting the WebMCP tool surface treat any of the four hand-rolled panels
-  as a patchable chart spec — `arr_bridge`/`retention_nrr`/`retention_churn`
+- letting the WebMCP tool surface treat any of the four hand-rolled Revenue
+  panels as a patchable chart spec — `arr_bridge`/`retention_nrr`/`retention_churn`
   remain the only `update_chart_spec` chart ids. `set_report_filters`
-  cross-filters all six panels' underlying data, which is a different
+  cross-filters all six Revenue panels' underlying data, which is a different
   thing from turning the four hand-rolled ones into agent-editable Vega
   specs — that line hasn't moved.
+- WebMCP tools, filters, undo, or persistence for the People or Product
+  Usage reports — they're intentionally static for now.
+- a fourth report, or any general-purpose report-abstraction layer beyond
+  the tab switcher — three hand-coded report pages sharing display
+  primitives is the current shape, not a registry/plugin system.
 
 ## Working style note
 

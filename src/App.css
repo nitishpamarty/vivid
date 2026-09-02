@@ -8,7 +8,7 @@
   --gridline:     #e1e0d9;
   --baseline:     #c3c2b7;
   --border:       rgba(11,11,11,0.10);
-  --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a;
+  --cat-1: #2a78d6; --cat-2: #eb6834; --cat-3: #1baf7a; --cat-4: #eda100;
   --seq-strong:   #2a78d6;
   --seq-mild:     #9ec5f4;
   --div-neutral:  #f0efec;
@@ -25,9 +25,28 @@
   min-height: 100%;
 }
 
+/* Per-report identity color — everything downstream (rank-bar fills, donut
+   "active" wash, histogram's high tier, sequential heatmap cells, the brand
+   mark) reads --brand/--seq-*, so retinting these two blocks is enough to
+   make each report feel distinct without touching component logic. */
+.northbeam[data-report="people"] {
+  --brand: #c9852f; --brand-wash: rgba(201,133,47,0.10);
+  --seq-strong: #c9852f; --seq-mild: #ecc691;
+}
+.northbeam[data-report="usage"] {
+  --brand: #7d52d6; --brand-wash: rgba(125,82,214,0.10);
+  --seq-strong: #7d52d6; --seq-mild: #c9b8ef;
+}
+
 .shell { max-width: 1280px; margin: 0 auto; padding: 28px 32px 64px; }
 
-.topbar { display: flex; align-items: center; margin-bottom: 22px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
+.report-tabs { display: flex; gap: 4px; background: var(--bg-card-2); border-radius: 999px; padding: 3px; }
+.report-tab {
+  font: 500 12.5px "IBM Plex Sans", sans-serif; color: var(--ink-secondary);
+  background: none; border: none; border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.report-tab.active { background: var(--bg-card); color: var(--ink-primary); font-weight: 600; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .mark {
   width: 30px; height: 30px; border-radius: 8px; background: var(--brand);
@@ -136,6 +155,21 @@
   font-family: "IBM Plex Mono", monospace; font-weight: 500; color: var(--ink-primary);
 }
 
+.donut-legend .item:disabled, .rank-row:disabled, .heat-grid .hrow-label:disabled {
+  opacity: 1; cursor: default;
+}
+
+.hist { display: flex; flex-direction: column; gap: 14px; }
+.hist-legend { display: flex; gap: 18px; flex-wrap: wrap; }
+.hist-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-secondary); }
+.hist-legend-item .sw { width: 8px; height: 8px; border-radius: 2px; }
+.hist-legend-item b { font-family: "IBM Plex Mono", monospace; font-weight: 600; margin-left: 2px; }
+.hist-bars { display: flex; align-items: flex-end; gap: 8px; height: 100px; }
+.hist-bar { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.hist-bar-track { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.hist-bar-fill { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; }
+.hist-bar-label { font-size: 10.5px; color: var(--ink-muted); margin-top: 6px; white-space: nowrap; }
+
 .northbeam .grid + .card { margin-top: 14px; }
 .log-empty { font-size: 12px; color: var(--ink-muted); }
 .log-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
@@ -149,3 +183,16 @@
 footer.note { margin-top: 22px; font-size: 11.5px; color: var(--ink-muted); text-align: center; }
 
 .loading, .error { padding: 64px; text-align: center; color: var(--ink-muted); font-size: 13px; }
+
+/* Grid/flex items default to min-width:auto (their content's intrinsic width),
+   which blocks shrinking below that and causes horizontal overflow on narrow
+   viewports regardless of the `fr` track sizing above. */
+.kpi-row > *, .grid > *, .stack > *, .retention-split > *, .heat-grid > * { min-width: 0; }
+
+@media (max-width: 680px) {
+  .shell { padding: 16px 14px 40px; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .grid { grid-template-columns: 1fr; }
+  .retention-split { grid-template-columns: 1fr; }
+  .heat-grid { overflow-x: auto; }
+}

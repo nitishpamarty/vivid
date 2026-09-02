@@ -1,45 +1,25 @@
-import type { Segment } from '../lib/types';
+import type { AcquisitionChannel } from '../lib/types';
+import { Donut } from './Donut';
 
 interface Slice {
   label: string;
-  segment: Segment;
+  channel: AcquisitionChannel;
   pct: number;
   color: string;
 }
 
 interface Props {
-  segments: Slice[];
-  activeSegment: Segment | 'all';
-  onToggle: (segment: Segment) => void;
+  channels: Slice[];
+  activeChannel: AcquisitionChannel | 'all';
+  onToggle: (channel: AcquisitionChannel) => void;
 }
 
-export function ArrMixDonut({ segments, activeSegment, onToggle }: Props) {
-  let acc = 0;
-  const stops = segments
-    .map((s) => {
-      const from = acc;
-      acc += s.pct;
-      return `${s.color} ${from}% ${acc}%`;
-    })
-    .join(', ');
-
+export function ArrMixDonut({ channels, activeChannel, onToggle }: Props) {
   return (
-    <div className="donut-wrap">
-      <div className="donut" style={{ background: `conic-gradient(${stops})` }} />
-      <div className="donut-legend">
-        {segments.map((s) => (
-          <button
-            type="button"
-            key={s.label}
-            className={`item filterable ${activeSegment === s.segment ? 'active' : ''}`}
-            onClick={() => onToggle(s.segment)}
-          >
-            <span className="sw" style={{ background: s.color }} />
-            {s.label}
-            <b>{s.pct.toFixed(0)}%</b>
-          </button>
-        ))}
-      </div>
-    </div>
+    <Donut
+      segments={channels.map((s) => ({ id: s.channel, label: s.label, pct: s.pct, color: s.color }))}
+      activeId={activeChannel === 'all' ? undefined : activeChannel}
+      onToggle={(id) => onToggle(id as AcquisitionChannel)}
+    />
   );
 }

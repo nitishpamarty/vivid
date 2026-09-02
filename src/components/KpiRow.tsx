@@ -1,6 +1,6 @@
 import { Sparkline } from './Sparkline';
 
-interface KpiCardProps {
+export interface KpiCardProps {
   label: string;
   value: string;
   deltaLabel: string;
@@ -10,7 +10,7 @@ interface KpiCardProps {
   attainment?: { pct: number; caption: string };
 }
 
-function KpiCard({ label, value, deltaLabel, deltaGood, sparkline, invertSpark, attainment }: KpiCardProps) {
+export function KpiCard({ label, value, deltaLabel, deltaGood, sparkline, invertSpark, attainment }: KpiCardProps) {
   return (
     <div className="card kpi">
       <div className="label">{label}</div>
@@ -59,9 +59,9 @@ export function KpiRow(p: KpiRowProps) {
       />
       <KpiCard
         label="Net Revenue Retention"
-        value={`${p.nrr.toFixed(0)}%`}
-        deltaLabel={`${p.nrrDeltaPp >= 0 ? '+' : ''}${p.nrrDeltaPp.toFixed(0)}pp QoQ`}
-        deltaGood={p.nrrDeltaPp >= 0}
+        value={Number.isNaN(p.nrr) ? 'No data' : `${p.nrr.toFixed(0)}%`}
+        deltaLabel={Number.isNaN(p.nrrDeltaPp) ? '—' : `${p.nrrDeltaPp >= 0 ? '+' : ''}${p.nrrDeltaPp.toFixed(0)}pp QoQ`}
+        deltaGood={!(p.nrrDeltaPp < 0)}
         sparkline={p.nrrSpark}
       />
       <KpiCard

@@ -10,6 +10,7 @@ export const PALETTE = {
   cat1: '#2a78d6',
   cat2: '#eb6834',
   cat3: '#1baf7a',
+  cat4: '#eda100',
 };
 
 export const BRAND = '#2a78d6';

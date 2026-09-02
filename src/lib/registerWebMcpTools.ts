@@ -16,7 +16,16 @@ export interface ToolBridge {
   getFilters: () => ReportFilters;
   applyFilterPatch: (patch: Record<string, unknown>) => ReportFilters;
   getTopAccounts: () => { name: string; arr: number }[];
+  getValidAccountNames: () => readonly string[];
   logAgent: (message: string) => void;
+}
+
+function describeCall(name: string, input: Record<string, unknown>): string {
+  const patch = input.patch as Record<string, unknown> | undefined;
+  const summary = patch && Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', ');
+  if (name === 'update_chart_spec') return `updated ${input.chartId}: ${summary}`;
+  if (name === 'set_report_filters') return `filtered: ${summary}`;
+  return `called ${name}`;
 }
 
 function tool(name: string, description: string, inputSchema: Record<string, unknown>, run: (input: Record<string, unknown>) => unknown, bridge: ToolBridge) {
@@ -27,7 +36,7 @@ function tool(name: string, description: string, inputSchema: Record<string, unk
     execute: (input: Record<string, unknown>) => {
       const result = run(input ?? {});
       const r = result as { ok: boolean; reason?: string };
-      bridge.logAgent(r.ok ? `called ${name}` : `called ${name} (rejected: ${r.reason})`);
+      bridge.logAgent(r.ok ? describeCall(name, input ?? {}) : `called ${name} (rejected: ${r.reason})`);
       return result;
     },
   };
@@ -39,7 +48,7 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
   const tools = [
     tool(
       'get_report_context',
-      'Get the active report id, the current knob state of the two agent-editable charts (ARR bridge, retention NRR/churn), the fields available on each, the active report-wide filters (segment, region, planTier, accountName) which cross-filter all six panels, and the current top-5 accounts (name + ARR) — the exact name strings set_report_filters.accountName accepts.',
+      'Get the active report id, the current knob state of the two agent-editable charts (ARR bridge, retention NRR/churn), the fields available on each, the active report-wide filters (segment, region, planTier, channel, contractType, accountName) which cross-filter all six panels, and the current top-5 accounts (name + ARR) — the exact name strings set_report_filters.accountName accepts.',
       { type: 'object', properties: {} },
       () => ({
         ok: true,
@@ -84,11 +93,11 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
     ),
     tool(
       'set_report_filters',
-      'Set one or more report-wide filters (segment, region, planTier from list_report_options; accountName is a free-text customer name from get_report_context\'s topAccounts, for drilling into a single account). Cross-filters all six panels, including the four non-Vega ones. Use "all" to clear a filter. Validated patch, atomic replace.',
+      'Set one or more report-wide filters (segment, region, planTier, channel, contractType from list_report_options; accountName is a free-text customer name from get_report_context\'s topAccounts, for drilling into a single account). Cross-filters all six panels, including the four non-Vega ones. Use "all" to clear a filter. Validated patch, atomic replace.',
       { type: 'object', properties: { patch: { type: 'object' } }, required: ['patch'] },
       (input) => {
         const patch = input.patch as Record<string, unknown>;
-        const validation = validateFilterPatch(patch);
+        const validation = validateFilterPatch(patch, bridge.getValidAccountNames());
         if (!validation.ok) return { ok: false, reason: validation.reason, error: validation.error };
         const data = bridge.applyFilterPatch(patch);
         return { ok: true, data };
