@@ -25,6 +25,7 @@ import { NewLogosHeatmap } from './components/NewLogosHeatmap';
 import { ActivityLog, type LogEntry } from './components/ActivityLog';
 import { PeopleDashboard } from './components/PeopleDashboard';
 import { UsageDashboard } from './components/UsageDashboard';
+import { ExploreDashboard } from './components/ExploreDashboard';
 
 function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamData; report: ReportId; onChangeReport: (r: ReportId) => void }) {
   // Calendar axis stays derived from the unfiltered data so windowing
@@ -274,6 +275,8 @@ export default function App() {
       .then(([revenue, people, usage]) => setData({ revenue, people, usage }))
       .catch((e) => setError(String(e)));
   }, []);
+
+  if (report === 'explore') return <ExploreDashboard report={report} onChangeReport={setReport} />;
 
   if (error) return <div className="northbeam"><div className="error">Failed to load data: {error}</div></div>;
   if (!data) return <div className="northbeam"><div className="loading">Loading Northbeam data…</div></div>;

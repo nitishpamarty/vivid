@@ -37,6 +37,10 @@
   --brand: #7d52d6; --brand-wash: rgba(125,82,214,0.10);
   --seq-strong: #7d52d6; --seq-mild: #c9b8ef;
 }
+.northbeam[data-report="explore"] {
+  --brand: #1a8f7b; --brand-wash: rgba(26,143,123,0.10);
+  --seq-strong: #1a8f7b; --seq-mild: #9adbcd;
+}
 
 .shell { max-width: 1280px; margin: 0 auto; padding: 28px 32px 64px; }
 
@@ -179,6 +183,19 @@
 .log-row .actor.person { color: var(--ink-secondary); background: var(--bg-card-2); }
 .log-row .msg { color: var(--ink-secondary); }
 .log-row .ts { color: var(--ink-muted); font-size: 10.5px; white-space: nowrap; }
+
+.explore-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.explore-status { font-size: 12px; color: var(--ink-muted); margin: 10px 0 0; }
+.explore-status-error { color: var(--status-critical); }
+.sample-banner { font-size: 12px; color: var(--ink-secondary); background: var(--bg-card-2); border-radius: 8px; padding: 8px 12px; margin: 0; }
+.schema-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.schema-table th { text-align: left; font-weight: 500; color: var(--ink-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 0 8px 8px 0; }
+.schema-table td { padding: 6px 8px 6px 0; border-top: 1px solid var(--gridline); }
+.schema-table select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--ink-primary); }
+.schema-col-name { font-family: "IBM Plex Mono", monospace; }
+.schema-col-type { color: var(--ink-muted); }
+.schema-col-warn { color: var(--status-critical); font-size: 11.5px; }
+.explore-chart { min-height: 280px; }
 
 footer.note { margin-top: 22px; font-size: 11.5px; color: var(--ink-muted); text-align: center; }
 

@@ -131,6 +131,49 @@ more than one.
     `Sparkline` guards an empty series, and `arrGrowthYoY` guards a zero
     denominator; NRR's own NaN for a zero-base cohort is pre-existing
     Phase 1 behavior, left as is.
+- **Connect Data (built, on explicit direction — [src/components/ExploreDashboard.tsx](src/components/ExploreDashboard.tsx),
+  [src/lib/datasets.ts](src/lib/datasets.ts),
+  [src/lib/registerExploreWebMcpTools.ts](src/lib/registerExploreWebMcpTools.ts)):**
+  a 4th, separate surface — not a generalization of the three reports above,
+  see the "Explicit scope" note below. Picks from a hardcoded catalog of 7
+  real Postgres tables (Supabase; schema in
+  [supabase/migrations/0001_connect_data.sql](supabase/migrations/0001_connect_data.sql),
+  seeded by `scripts/seed-supabase.mjs`), infers each column's type from a
+  sample row, and lets a person override a column's *display* type
+  client-side (presentation-time cast only, not a schema change — resets on
+  reload, labeled as such in the UI; a failed cast becomes `null` with a
+  visible warning count, never `NaN`/`Invalid Date`). Rows are fetched
+  ordered + capped at 500 with an honest sampled/total-count banner when a
+  table is larger — never a silent truncation; exact server-side
+  aggregation for large tables (e.g. `mrr_monthly`, ~8k rows) is the correct
+  next increment, not built here.
+  - **WebMCP tool contract**, same shape/discipline as the Northbeam one
+    above: `list_datasets`, `connect_dataset`, `get_dataset_schema`,
+    `set_column_display_type` (read/mutate the dataset side),
+    `get_chart_contract`/`set_chart_contract` (the chart side).
+  - The agent **never** supplies a raw Vega-Lite spec. `set_chart_contract`
+    validates a small allow-listed contract (`mark`, `encoding` keyed by
+    `x`/`y`/`color`/`theta`, optional `title`) — same "chart-as-data, not
+    chart-as-code" invariant `chartState.ts` uses for the Northbeam knobs,
+    applied generically instead of per-chart. Validation rejects any
+    top-level key outside `mark`/`encoding`/`title` (so `data`/`url`/
+    `transform`/`config` can never reach the chart), requires
+    mark-appropriate channels (`arc` needs `theta`; `bar`/`line`/`point`
+    need `x` and `y`), and requires `aggregate`/`bin` only on a
+    `quantitative` channel. `buildVegaLiteSpec` in `datasets.ts` is the only
+    place `data.values` is set, from the app's own cast rows — never
+    agent-reachable.
+  - No Supabase persistence/realtime for this surface — the contract and
+    type overrides are local React state only, same as how People/Usage
+    shipped static before their own scope grew. Its activity log is
+    likewise local-only (reuses the `ActivityLog` component, no
+    `activity_log` row written).
+  - RLS: all 7 tables are read-only to the anon key (`for select using
+    (true)`) — a blanket "anyone with the anon key can read all 7 fictional
+    tables" policy, correct for this demo dataset, not the template if real
+    customer data ever lands in these tables. The service-role key used to
+    seed them is never written to a file — passed inline to
+    `scripts/seed-supabase.mjs` only.
 - **Visual design system:** dataviz skill's validated default palette
   (light theme, categorical/status/diverging colors as-is, no
   re-validation needed). Brand accent = series-1 blue `#2a78d6`, hardcoded
@@ -278,6 +321,24 @@ needed one (ponytail: don't generate a column with no consumer).
   the Tableau Server Content Analytics inspiration's calendar heatmap),
   not a per-report or per-date breakdown.
 
+## Data spec — Connect Data tables (`supabase/migrations/0001_connect_data.sql`, seeded by `scripts/seed-supabase.mjs`)
+
+Real Postgres tables mirroring the three Data spec sections above, one per
+generated file: `customers`, `mrr_monthly`, `cac_monthly`, `employees`,
+`reports`, `report_views_monthly`, `activity_heatmap`. Same columns as their
+source CSV/JSON, snake_cased; month-granularity columns (`month`,
+`signup_month`, `churn_month`, `hire_month`, `term_month`,
+`created_month`) are real Postgres `date`, stored as the 1st of the month
+(`"2023-10"` → `2023-10-01`), not left as text. Primary keys: single-column
+where the source has a natural id (`customer_id`, `employee_id`,
+`report_id`, `month` for `cac_monthly`), composite where it's a monthly
+fact table (`(customer_id, month)`, `(report_id, month)`,
+`(weekday, hour_bucket)`) — these are also `scripts/seed-supabase.mjs`'s
+upsert conflict targets. Seeding is upsert-only, explicitly: it inserts/
+updates by primary key but does not delete rows a re-run's source file no
+longer has — fine for this deterministic, regenerated-in-place dataset;
+`truncate table <name>;` first if a source file ever needs to shrink.
+
 ## Explicit scope
 
 **Built (Phase 1):** the six-panel Northbeam dashboard rendering from real
@@ -310,6 +371,16 @@ thin typed wrappers around them so the Revenue report's props/behavior are
 unchanged. `KpiRow.tsx` also now exports `KpiCard` itself so the new reports
 can build their own KPI rows with the same card look.
 
+**Built (Connect Data, on explicit direction):** a 4th tab, separate from
+the three reports above — pick a real Postgres table, override a column's
+display type, and an agent co-authors the resulting chart via a validated
+contract (`set_chart_contract`), not a raw spec. See the Connect Data bullet
+under "Architecture decisions" and its Data spec section above. This is
+deliberately **not** the deferred "report-abstraction layer" below: no
+registry/plugin system, no reuse of the Revenue/People/Usage report shape,
+no WebMCP tools added to those three reports — it's a distinct, generic
+surface that happens to sit behind a 4th tab, not a fourth report.
+
 **Explicitly deferred, do not build without a new decision:**
 - letting the WebMCP tool surface treat any of the four hand-rolled Revenue
   panels as a patchable chart spec — `arr_bridge`/`retention_nrr`/`retention_churn`
@@ -319,9 +390,18 @@ can build their own KPI rows with the same card look.
   specs — that line hasn't moved.
 - WebMCP tools, filters, undo, or persistence for the People or Product
   Usage reports — they're intentionally static for now.
-- a fourth report, or any general-purpose report-abstraction layer beyond
-  the tab switcher — three hand-coded report pages sharing display
-  primitives is the current shape, not a registry/plugin system.
+- a general-purpose report-abstraction layer (registry/plugin system) for
+  Revenue/People/Usage — three hand-coded report pages sharing display
+  primitives is still the current shape for those three. Connect Data above
+  is a separate, already-generic surface; it doesn't retroactively make this
+  one a thing to build.
+- migrating Revenue/People/Usage off local CSV/JSON onto Supabase — Connect
+  Data added Postgres tables for its own 7 datasets, it didn't move the
+  three reports' data layer.
+- persistence/realtime sync, server-side aggregation, arbitrary-CSV
+  ingestion, or transforms beyond type casting for Connect Data itself —
+  see the "Explicitly out of scope" list this feature shipped with (now
+  folded into the bullets above and the Data spec section).
 
 ## Working style note
 
