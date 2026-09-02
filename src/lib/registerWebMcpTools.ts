@@ -4,6 +4,7 @@ import {
 } from './chartState';
 import { FILTER_OPTIONS, validateFilterPatch, type ReportFilters } from './reportFilters';
 import type { SemanticLayerResult } from './semanticLayerClient';
+import { callUnregisterFns } from './webmcpCleanup';
 
 const REPORT_FIELDS: Record<ChartId, string[]> = {
   arr_bridge: ['label', 'month', 'delta', 'priorCum', 'newCum', 'positive'],
@@ -133,5 +134,5 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
   ];
 
   const unregisterFns = tools.map((t) => document.modelContext!.registerTool(t));
-  return () => unregisterFns.forEach((fn) => fn?.());
+  return () => callUnregisterFns(unregisterFns);
 }

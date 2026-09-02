@@ -8,7 +8,10 @@ interface ModelContextToolDescriptor {
 }
 
 interface ModelContext {
-  registerTool: (tool: ModelContextToolDescriptor) => (() => void) | void;
+  // Draft spec says unregister callback or void, but at least one deployed
+  // implementation returns a non-function truthy value instead — callers
+  // must not assume the return value is callable.
+  registerTool: (tool: ModelContextToolDescriptor) => unknown;
 }
 
 interface Document {

@@ -7,6 +7,7 @@
 // them, same division of labor as the Northbeam bridge.
 
 import { COLUMN_TYPES, DATASET_CATALOG, type ColumnType, type ContractResult } from './datasets';
+import { callUnregisterFns } from './webmcpCleanup';
 
 export interface DatasetSchema {
   datasetId: string;
@@ -132,5 +133,5 @@ export function registerExploreTools(bridge: ExploreBridge): () => void {
   ];
 
   const unregisterFns = tools.map((t) => document.modelContext!.registerTool(t));
-  return () => unregisterFns.forEach((fn) => fn?.());
+  return () => callUnregisterFns(unregisterFns);
 }
