@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-ssr/
+build/
+*.local
+.env
+.env.local
+.DS_Store
+.vscode/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
