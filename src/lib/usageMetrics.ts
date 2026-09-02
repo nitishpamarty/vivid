@@ -13,6 +13,10 @@ export function totalViews(data: UsageData, month: string): number {
   return viewsIn(data, month).reduce((s, r) => s + r.views, 0);
 }
 
+export function monthlyViewTotals(data: UsageData) {
+  return monthList(data).map((month) => ({ month, views: totalViews(data, month) }));
+}
+
 export function totalUniqueViewers(data: UsageData, month: string): number {
   return viewsIn(data, month).reduce((s, r) => s + r.uniqueViewers, 0);
 }

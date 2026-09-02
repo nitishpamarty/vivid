@@ -6,10 +6,11 @@ front of the viewer via browser-native WebMCP tools
 (`document.modelContext.registerTool`) — no MCP server, no vision model,
 just validated tool calls against shared, persisted state (Supabase; see
 below). The current
-build is "Northbeam," a fictional B2B SaaS company's revenue dashboard — one
-report, not a general chart builder. A separate "Connect Data" screen (see
-below) adds a small generic chart surface over real Postgres tables, without
-turning the three hand-coded reports into that abstraction themselves.
+build is "Northbeam," a fictional B2B SaaS company's Revenue dashboard plus a
+dark, activity-oriented Product Usage surface — not a general chart builder. A
+separate "Connect Data" screen (see below) adds a small generic chart surface
+over real Postgres tables, without turning the hand-coded reports into that
+abstraction themselves.
 
 ## Status
 
@@ -35,12 +36,11 @@ cross-filter all six panels, settable by a person or by the agent via the
 scope" section for the authoritative phase breakdown, and
 [evidence/](evidence/) for the manual verification log.
 
-**Second and third reports built** (on explicit direction — see AGENTS.md):
-a People report and a Product Usage report, switchable via tabs in the
-topbar next to the original Revenue report. Both are static/non-interactive
-(no WebMCP tools, no filters, no persistence) — reusing the same design
-system and four generalized display primitives (`Donut`, `RankedBarList`,
-`Heatmap`, `Histogram`) the Revenue report's panels were generalized into.
+**Product Usage built** (on explicit direction — see AGENTS.md): a static,
+non-interactive Activity OS surface beside Revenue. It uses the generated
+report-view data for a pulse strip, activity heatmap, monthly momentum,
+top reports, team shares, and engagement spread; it has no WebMCP tools,
+filters, persistence, or undo.
 
 **Connect Data built** (on explicit direction — see AGENTS.md): a 4th,
 separate "Connect Data" tab where you pick a real Postgres table (Supabase),
@@ -52,7 +52,7 @@ small validated *contract* (mark/encoding/title), never a raw spec; the app
 owns the actual chart data. See
 [src/lib/datasets.ts](src/lib/datasets.ts) and
 [src/lib/registerExploreWebMcpTools.ts](src/lib/registerExploreWebMcpTools.ts).
-This is a separate surface from the three reports above, not a
+This is a separate surface from the two report surfaces above, not a
 generalization of them — see AGENTS.md's "Connect Data" section.
 
 ## Tech stack
@@ -73,7 +73,7 @@ generalization of them — see AGENTS.md's "Connect Data" section.
 ```
 npm install
 node scripts/generate-data.mjs          # writes data/customers.csv + mrr_monthly.csv + cac_monthly.json
-node scripts/generate-people-data.mjs   # writes data/employees.csv
+node scripts/generate-people-data.mjs   # writes data/employees.csv for Connect Data
 node scripts/generate-usage-data.mjs    # writes data/reports.csv + report_views_monthly.csv + activity_heatmap.json
 npm run dev
 ```
@@ -120,7 +120,7 @@ stays anon-key-only).
 ├── AGENTS.md                 # architecture decisions + scope
 ├── HANDOFF.md                 # historical, see AGENTS.md
 ├── scripts/                  # data generators + seed-supabase.mjs (loads them into Postgres)
-├── data/                     # generated CSVs/JSON for all three reports
+├── data/                     # generated CSVs/JSON for Revenue, Usage, and Connect Data
 ├── supabase/migrations/      # SQL for the Connect Data tables + RLS
 └── src/
     ├── lib/                  # data loading, metrics, Vega-Lite spec builders

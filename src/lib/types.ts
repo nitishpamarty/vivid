@@ -39,18 +39,6 @@ export interface NorthbeamData {
 
 export type Department = 'Engineering' | 'Sales' | 'Customer Success' | 'Marketing' | 'Product' | 'People' | 'Finance';
 
-export interface Employee {
-  employeeId: string;
-  department: Department;
-  region: Region;
-  hireMonth: string; // YYYY-MM
-  termMonth: string | null; // YYYY-MM
-}
-
-export interface PeopleData {
-  employees: Employee[];
-}
-
 export interface ReportDef {
   reportId: string;
   name: string;

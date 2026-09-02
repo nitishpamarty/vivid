@@ -29,14 +29,6 @@
    "active" wash, histogram's high tier, sequential heatmap cells, the brand
    mark) reads --brand/--seq-*, so retinting these two blocks is enough to
    make each report feel distinct without touching component logic. */
-.northbeam[data-report="people"] {
-  --brand: #c9852f; --brand-wash: rgba(201,133,47,0.10);
-  --seq-strong: #c9852f; --seq-mild: #ecc691;
-}
-.northbeam[data-report="usage"] {
-  --brand: #7d52d6; --brand-wash: rgba(125,82,214,0.10);
-  --seq-strong: #7d52d6; --seq-mild: #c9b8ef;
-}
 .northbeam[data-report="explore"] {
   --brand: #1a8f7b; --brand-wash: rgba(26,143,123,0.10);
   --seq-strong: #1a8f7b; --seq-mild: #9adbcd;
@@ -200,6 +192,61 @@
 
 footer.note { margin-top: 22px; font-size: 11.5px; color: var(--ink-muted); text-align: center; }
 
+/* Product Usage is intentionally a separate dark Activity OS surface. */
+.usage-os {
+  --bg-page: #111827; --bg-card: #192235; --bg-card-2: #202c43;
+  --ink-primary: #f8fafc; --ink-secondary: #cbd5e1; --ink-muted: #9aa8be;
+  --gridline: #334158; --baseline: #52627d; --border: #334158;
+  --brand: #5eead4; --brand-wash: rgba(94,234,212,.14); --seq-strong: #5eead4; --seq-mild: #334158;
+}
+.usage-os .topbar { border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 20px; }
+.usage-os .report-tabs { background: var(--bg-card-2); }
+.usage-os .report-tab.active { background: var(--bg-page); color: var(--ink-primary); }
+.usage-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+.usage-kicker { color: var(--brand); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 8px; }
+.usage-head h1 { font: 500 26px/1.05 "Sora", sans-serif; letter-spacing: -.04em; margin: 0; }
+.usage-head > div > p:last-child, .usage-panel > p { color: var(--ink-muted); font-size: 12px; margin: 7px 0 16px; }
+.usage-period { color: var(--ink-muted); text-align: right; font-size: 12px; white-space: nowrap; }
+.usage-period strong { color: var(--ink-primary); display: block; font: 500 18px "IBM Plex Sans", sans-serif; margin-bottom: 2px; }
+.usage-pulse { display: flex; flex-wrap: wrap; border-block: 1px solid var(--border); margin: 20px 0 24px; }
+.usage-pulse > div { flex: 1 1 180px; padding: 14px 18px 14px 0; margin-right: 18px; border-right: 1px solid var(--border); }
+.usage-pulse > div:last-child { border: 0; }
+.usage-pulse span { color: var(--ink-muted); display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.usage-pulse strong { display: block; font: 500 28px/1.15 "IBM Plex Mono", monospace; margin-top: 4px; }
+.usage-pulse em { color: var(--brand); font: 500 12px "IBM Plex Sans", sans-serif; margin-left: 6px; }
+.usage-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(270px, .9fr); gap: 16px; align-items: stretch; }
+.usage-left, .usage-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.usage-panel { background: var(--bg-card); border: 1px solid var(--border); padding: 18px; min-width: 0; }
+.usage-panel h2 { font: 500 15px "IBM Plex Sans", sans-serif; margin: 0; }
+.usage-heatmap-panel { flex: 1; }
+.usage-heatmap { display: grid; grid-template-columns: 42px repeat(6, minmax(30px, 1fr)); gap: 5px; align-items: center; }
+.usage-heatmap > span { color: var(--ink-muted); font-size: 10px; text-align: center; }
+.usage-heatmap .usage-day { font-size: 11px; text-align: left; }
+.usage-heatmap .usage-cell { aspect-ratio: 1.7; color: #0b1220; display: grid; place-items: center; font: 500 11px "IBM Plex Mono", monospace; background: color-mix(in srgb, var(--brand) var(--heat), var(--bg-card-2)); }
+.usage-legend { align-items: center; color: var(--ink-muted); display: flex; font-size: 10px; justify-content: space-between; margin-top: 12px; }
+.usage-legend i { background: linear-gradient(90deg, var(--bg-card-2), var(--brand)); height: 7px; width: 60px; }
+.usage-momentum svg { display: block; height: auto; width: 100%; }
+.usage-momentum line { stroke: var(--border); }
+.usage-momentum polyline { fill: none; stroke: var(--brand); stroke-width: 3; }
+.usage-momentum circle { fill: var(--brand); }
+.usage-momentum text { fill: var(--ink-muted); font: 10px "IBM Plex Sans", sans-serif; }
+.usage-momentum .usage-last-value { fill: var(--ink-primary); font: 500 12px "IBM Plex Mono", monospace; }
+.usage-ranks, .usage-teams { display: grid; gap: 12px; }
+.usage-ranks > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 8px; font-size: 12px; }
+.usage-ranks span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-ranks strong, .usage-distribution strong { font: 500 11px "IBM Plex Mono", monospace; }
+.usage-ranks i, .usage-teams i { background: #2b3850; display: block; grid-column: 1 / -1; height: 5px; overflow: hidden; }
+.usage-ranks b, .usage-teams b { background: #60a5fa; display: block; height: 100%; }
+.usage-teams > div { align-items: center; display: grid; grid-template-columns: minmax(82px, 1fr) 1.5fr 34px; gap: 8px; font-size: 12px; }
+.usage-teams i { grid-column: auto; }
+.usage-teams em { color: var(--ink-muted); font-size: 11px; font-style: normal; text-align: right; }
+.usage-distribution { flex: 1; display: flex; flex-direction: column; }
+.usage-distribution > div { align-items: end; border-bottom: 1px solid var(--border); display: grid; flex: 1; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; min-height: 116px; padding-top: 18px; }
+.usage-distribution > div > div { align-items: center; display: grid; grid-template-rows: 1fr auto auto; height: 100%; gap: 5px; text-align: center; }
+.usage-distribution i { align-items: end; display: flex; height: 100%; }
+.usage-distribution b { background: #60a5fa; display: block; min-height: 3px; width: 100%; }
+.usage-distribution span { color: var(--ink-muted); font-size: 10px; white-space: nowrap; }
+
 .loading, .error { padding: 64px; text-align: center; color: var(--ink-muted); font-size: 13px; }
 .shared-status-card { max-width: 520px; margin: 90px auto 0; text-align: center; }
 .shared-status-card .panel-title { margin-bottom: 8px; }
@@ -224,4 +271,11 @@ footer.note { margin-top: 22px; font-size: 11.5px; color: var(--ink-muted); text
   .grid { grid-template-columns: 1fr; }
   .retention-split { grid-template-columns: 1fr; }
   .heat-grid { overflow-x: auto; }
+  .usage-head { align-items: flex-start; flex-direction: column; }
+  .usage-period { text-align: left; }
+  .usage-grid { grid-template-columns: 1fr; }
+  .usage-pulse > div { border-right: 0; border-bottom: 1px solid var(--border); margin-right: 0; padding-right: 0; }
+  .usage-pulse > div:last-child { border-bottom: 0; }
+  .usage-heatmap { grid-template-columns: 36px repeat(6, minmax(26px, 1fr)); gap: 3px; }
+  .usage-heatmap .usage-cell { font-size: 10px; }
 }

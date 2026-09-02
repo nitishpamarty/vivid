@@ -131,7 +131,7 @@ more than one.
 - **Connect Data (built, on explicit direction — [src/components/ExploreDashboard.tsx](src/components/ExploreDashboard.tsx),
   [src/lib/datasets.ts](src/lib/datasets.ts),
   [src/lib/registerExploreWebMcpTools.ts](src/lib/registerExploreWebMcpTools.ts)):**
-  a 4th, separate surface — not a generalization of the three reports above,
+  a 3rd, separate surface — not a generalization of the two report surfaces above,
   see the "Explicit scope" note below. Picks from a hardcoded catalog of 7
   real Postgres tables (Supabase; schema in
   [supabase/migrations/0001_connect_data.sql](supabase/migrations/0001_connect_data.sql),
@@ -161,8 +161,7 @@ more than one.
     place `data.values` is set, from the app's own cast rows — never
     agent-reachable.
   - No Supabase persistence/realtime for this surface — the contract and
-    type overrides are local React state only, same as how People/Usage
-    shipped static before their own scope grew. Its activity log is
+    type overrides are local React state only. Its activity log is
     likewise local-only (reuses the `ActivityLog` component, no
     `activity_log` row written).
   - RLS: all 7 tables are read-only to the anon key (`for select using
@@ -277,15 +276,13 @@ at month 36: Enterprise 43%, Mid-Market 35%, SMB 22%.
 
 </details>
 
-## Data spec — People report (generated — `scripts/generate-people-data.mjs`)
+## Data spec — Employees dataset (generated — `scripts/generate-people-data.mjs`)
 
 `data/employees.csv`: `employee_id`, `department`, `region`, `hire_month`,
 `term_month`. One row per employee (a roster, not a monthly time series like
-`mrr_monthly.csv`) — the month axis (`monthList` in
-[src/lib/peopleMetrics.ts](src/lib/peopleMetrics.ts)) is derived from the
-min/max of `hire_month`/`term_month` rather than hardcoded, so it's not
-tied to the Revenue report's Oct 2023–Sep 2026 window by anything other
-than both generators happening to start their simulation the same month.
+`mrr_monthly.csv`). It remains generated and loaded into Supabase because
+Connect Data exposes it as one of its seven datasets; there is no People
+dashboard or client-side People data loader.
 
 Bottom-up monthly simulation like `generate-data.mjs`: 28 employees seeded
 month 1, each month an independent attrition roll (~1.45%/mo base rate) and
@@ -298,9 +295,7 @@ post-rescale-removal version).
 
 `department` (`Engineering | Sales | Customer Success | Marketing | Product
 | People | Finance`) and `region` (reuses the Revenue report's `NA | EMEA |
-APAC | LATAM` enum) are the only breakdown dimensions — no `level` or
-`employment_type` field, since nothing in the People report's five panels
-needed one (ponytail: don't generate a column with no consumer).
+APAC | LATAM` enum) are the only breakdown dimensions.
 
 ## Data spec — Product Usage report (generated — `scripts/generate-usage-data.mjs`)
 
@@ -354,30 +349,22 @@ heatmap), cross-filtering all six panels; the `set_report_filters` WebMCP
 tool so the agent can set the same filters; undo/persistence extended to
 cover filter state alongside chart knobs.
 
-**Built (second/third reports, on explicit direction):** a People report
-and a Product Usage report, alongside the original Revenue report, switched
-via tabs in the topbar (`src/components/Topbar.tsx`'s `ReportId`). This is
-the "new decision" the deferred-scope note below used to require — see the
-data spec section for what each report covers. Both new reports are
-**static/non-interactive**: no WebMCP tools, no filters, no undo/persistence
-— that boundary hasn't moved, only the "how many reports" one has. Adding
-either report is what justified generalizing four of the Revenue report's
-hand-rolled display components into reusable primitives (`Donut`,
-`RankedBarList`, `Heatmap`, `Histogram` — each now has ≥2 real call sites,
-not a speculative one); `ArrMixDonut`/`TopAccounts`/`NewLogosHeatmap` are now
-thin typed wrappers around them so the Revenue report's props/behavior are
-unchanged. `KpiRow.tsx` also now exports `KpiCard` itself so the new reports
-can build their own KPI rows with the same card look.
+**Built (Product Usage, on explicit direction):** a static Activity OS
+surface alongside Revenue, switched via `Topbar.tsx`. It uses a dark,
+activity-oriented treatment with real generated-data pulse, heatmap, monthly
+momentum, top reports, team shares, and engagement spread. It has no WebMCP
+tools, filters, undo, or persistence. The former People report was removed;
+its generated employees dataset remains for Connect Data.
 
-**Built (Connect Data, on explicit direction):** a 4th tab, separate from
-the three reports above — pick a real Postgres table, override a column's
+**Built (Connect Data, on explicit direction):** a 3rd tab, separate from
+the two report surfaces above — pick a real Postgres table, override a column's
 display type, and an agent co-authors the resulting chart via a validated
 contract (`set_chart_contract`), not a raw spec. See the Connect Data bullet
 under "Architecture decisions" and its Data spec section above. This is
 deliberately **not** the deferred "report-abstraction layer" below: no
-registry/plugin system, no reuse of the Revenue/People/Usage report shape,
-no WebMCP tools added to those three reports — it's a distinct, generic
-surface that happens to sit behind a 4th tab, not a fourth report.
+  registry/plugin system, no reuse of the Revenue/Product Usage report shape,
+  no WebMCP tools added to those reports — it's a distinct, generic
+  surface that happens to sit behind a 3rd tab, not a third report.
 
 **Explicitly deferred, do not build without a new decision:**
 - letting the WebMCP tool surface treat any of the four hand-rolled Revenue
@@ -386,16 +373,16 @@ surface that happens to sit behind a 4th tab, not a fourth report.
   cross-filters all six Revenue panels' underlying data, which is a different
   thing from turning the four hand-rolled ones into agent-editable Vega
   specs — that line hasn't moved.
-- WebMCP tools, filters, undo, or persistence for the People or Product
-  Usage reports — they're intentionally static for now.
+- WebMCP tools, filters, undo, or persistence for Product Usage — it is
+  intentionally static for now.
 - a general-purpose report-abstraction layer (registry/plugin system) for
-  Revenue/People/Usage — three hand-coded report pages sharing display
-  primitives is still the current shape for those three. Connect Data above
+  Revenue/Product Usage — two hand-coded report surfaces are still the
+  current shape. Connect Data above
   is a separate, already-generic surface; it doesn't retroactively make this
   one a thing to build.
-- migrating Revenue/People/Usage off local CSV/JSON onto Supabase — Connect
+- migrating Revenue/Product Usage off local CSV/JSON onto Supabase — Connect
   Data added Postgres tables for its own 7 datasets, it didn't move the
-  three reports' data layer.
+  two report surfaces' data layer.
 - persistence/realtime sync, server-side aggregation, arbitrary-CSV
   ingestion, or transforms beyond type casting for Connect Data itself —
   see the "Explicitly out of scope" list this feature shipped with (now

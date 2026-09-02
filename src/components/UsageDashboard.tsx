@@ -1,92 +1,56 @@
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import type { UsageData } from '../lib/types';
 import {
-  activityGrid, computeUsageKpis, engagementDistribution, HOUR_BUCKETS, topReports, viewsByOwnerTeam,
+  activityGrid, computeUsageKpis, engagementDistribution, HOUR_BUCKETS, monthlyViewTotals, topReports, viewsByOwnerTeam,
 } from '../lib/usageMetrics';
+import { monthLabel } from '../lib/metrics';
 import { Topbar, type ReportId } from './Topbar';
-import { KpiCard } from './KpiRow';
-import { Donut } from './Donut';
-import { RankedBarList } from './RankedBarList';
-import { Heatmap } from './Heatmap';
-import { Histogram } from './Histogram';
 
-const TEAM_COLORS = ['#7d52d6', '#2a78d6', '#eb6834', '#1baf7a', '#d6b12a'];
+interface Props { data: UsageData; report: ReportId; onChangeReport: (r: ReportId) => void; }
 
-interface Props {
-  data: UsageData;
-  report: ReportId;
-  onChangeReport: (r: ReportId) => void;
-}
+function delta(value: number, suffix: string) { return `${value >= 0 ? '+' : ''}${value.toFixed(0)}${suffix}`; }
 
 export function UsageDashboard({ data, report, onChangeReport }: Props) {
   const kpis = useMemo(() => computeUsageKpis(data), [data]);
   const top = useMemo(() => topReports(data, kpis.latest, 5), [data, kpis.latest]);
   const distribution = useMemo(() => engagementDistribution(data, kpis.latest), [data, kpis.latest]);
   const activity = useMemo(() => activityGrid(data), [data]);
-  const byTeam = useMemo(() => viewsByOwnerTeam(data, kpis.latest), [data, kpis.latest]);
+  const byTeam = useMemo(() => viewsByOwnerTeam(data, kpis.latest).sort((a, b) => b.views - a.views), [data, kpis.latest]);
+  const momentum = useMemo(() => monthlyViewTotals(data), [data]);
+  const activityMax = Math.max(...activity.flatMap((row) => row.values), 1);
+  const teamTotal = byTeam.reduce((sum, team) => sum + team.views, 0) || 1;
+  const maxTop = top[0]?.value || 1;
+  const maxBin = Math.max(...distribution.map((bin) => bin.count), 1);
+  const chart = useMemo(() => {
+    const width = 640, height = 190, pad = 28;
+    const values = momentum.map((point) => point.views);
+    const min = Math.min(...values), max = Math.max(...values);
+    const x = (index: number) => pad + index * (width - pad * 2) / Math.max(values.length - 1, 1);
+    const y = (value: number) => height - pad - ((value - min) / Math.max(max - min, 1)) * (height - pad * 2);
+    return { width, height, pad, points: values.map((value, index) => `${x(index)},${y(value)}`).join(' '), x, y, last: values.at(-1) ?? 0 };
+  }, [momentum]);
 
-  const teamTotal = byTeam.reduce((s, t) => s + t.views, 0) || 1;
-  const donutSegments = byTeam
-    .sort((a, b) => b.views - a.views)
-    .map((t, i) => ({ id: t.team, label: t.team, pct: (t.views / teamTotal) * 100, color: TEAM_COLORS[i % TEAM_COLORS.length] }));
-
-  return (
-    <div className="northbeam" data-report={report}>
-      <div className="shell">
-        <Topbar report={report} onChangeReport={onChangeReport} />
-
-        <div className="kpi-row">
-          <KpiCard
-            label="Report Views" value={kpis.views.toLocaleString()}
-            deltaLabel={`${kpis.viewsDeltaPct >= 0 ? '+' : ''}${kpis.viewsDeltaPct.toFixed(0)}% MoM`}
-            deltaGood={kpis.viewsDeltaPct >= 0} sparkline={kpis.viewsSpark}
-          />
-          <KpiCard
-            label="Avg Engagement" value={kpis.engagement.toFixed(0)}
-            deltaLabel={`${kpis.engagementDeltaPp >= 0 ? '+' : ''}${kpis.engagementDeltaPp.toFixed(0)}pt MoM`}
-            deltaGood={kpis.engagementDeltaPp >= 0} sparkline={kpis.engagementSpark}
-          />
-          <KpiCard
-            label="Active Reports" value={String(kpis.activeReports)}
-            deltaLabel="viewed this month" deltaGood sparkline={kpis.activeReportsSpark}
-          />
-          <KpiCard
-            label="Unique Viewers" value={kpis.uniqueViewers.toLocaleString()}
-            deltaLabel={`${kpis.uniqueViewersDeltaPct >= 0 ? '+' : ''}${kpis.uniqueViewersDeltaPct.toFixed(0)}% MoM`}
-            deltaGood={kpis.uniqueViewersDeltaPct >= 0} sparkline={kpis.uniqueViewersSpark}
-          />
-        </div>
-
-        <div className="grid">
-          <div className="stack stack-left">
-            <div className="card">
-              <p className="panel-title">Activity pattern</p>
-              <p className="panel-sub">Views by weekday and hour of day</p>
-              <Heatmap columns={HOUR_BUCKETS} rows={activity} mode="sequential" />
-            </div>
-            <div className="card">
-              <p className="panel-title">Engagement distribution</p>
-              <p className="panel-sub">Reports by engagement score, this month</p>
-              <Histogram bins={distribution} tierLabels={{ low: 'low engagement', mid: 'mid engagement', high: 'high engagement' }} />
-            </div>
-          </div>
-
-          <div className="stack">
-            <div className="card">
-              <p className="panel-title">Most viewed reports</p>
-              <p className="panel-sub">This month</p>
-              <RankedBarList items={top} />
-            </div>
-            <div className="card">
-              <p className="panel-title">Views by owning team</p>
-              <p className="panel-sub">This month</p>
-              <Donut segments={donutSegments} />
-            </div>
-          </div>
-        </div>
-
-        <footer className="note">Illustrative data for a fictional company — for direction review only.</footer>
-      </div>
+  return <div className="northbeam usage-os" data-report={report}><div className="shell">
+    <Topbar report={report} onChangeReport={onChangeReport} />
+    <header className="usage-head"><div><p className="usage-kicker">Product intelligence / Activity OS</p><h1>Usage at a glance</h1><p>Find where the product is alive, quiet, or losing momentum.</p></div><div className="usage-period"><strong>{monthLabel(kpis.latest)}</strong>{kpis.activeReports} active reports</div></header>
+    <div className="usage-pulse" aria-label="Product usage pulse">
+      <div><span>Report views</span><strong>{kpis.views.toLocaleString()} <em>{delta(kpis.viewsDeltaPct, '%')}</em></strong></div>
+      <div><span>Unique viewers</span><strong>{kpis.uniqueViewers.toLocaleString()} <em>{delta(kpis.uniqueViewersDeltaPct, '%')}</em></strong></div>
+      <div><span>Average engagement</span><strong>{kpis.engagement.toFixed(0)} <em>{delta(kpis.engagementDeltaPp, 'pt')}</em></strong></div>
     </div>
-  );
+    <div className="usage-grid"><div className="usage-left">
+      <section className="usage-panel usage-heatmap-panel"><h2>When the workspace is active</h2><p>Views by weekday and hour of day.</p>
+        <div className="usage-heatmap"><span />{HOUR_BUCKETS.map((hour) => <span key={hour}>{hour}</span>)}{activity.flatMap((row) => [<span className="usage-day" key={`${row.label}-label`}>{row.label}</span>, ...row.values.map((value, index) => <span className="usage-cell" key={`${row.label}-${HOUR_BUCKETS[index]}`} style={{ '--heat': `${18 + value / activityMax * 78}%` } as CSSProperties} aria-label={`${row.label} ${HOUR_BUCKETS[index]}: ${value} views`}>{value}</span>)])}</div>
+        <div className="usage-legend"><span>Quiet</span><i /><span>Busy</span></div>
+      </section>
+      <section className="usage-panel usage-momentum"><h2>Usage momentum</h2><p>Monthly report views from October 2023 through {monthLabel(kpis.latest)}.</p>
+        <svg viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label={`Monthly views ending at ${chart.last.toLocaleString()}`}><line x1={chart.pad} y1={chart.height - chart.pad} x2={chart.width - chart.pad} y2={chart.height - chart.pad} /><polyline points={chart.points} /><circle cx={chart.x(momentum.length - 1)} cy={chart.y(chart.last)} r="4" /><text x={chart.pad} y={chart.height - 7}>{monthLabel(momentum[0]?.month ?? '')}</text><text x={chart.width - chart.pad} y={chart.height - 7} textAnchor="end">{monthLabel(kpis.latest)}</text><text className="usage-last-value" x={chart.width - chart.pad} y={chart.y(chart.last) - 11} textAnchor="end">{chart.last.toLocaleString()}</text></svg>
+      </section>
+    </div><aside className="usage-right">
+      <section className="usage-panel"><h2>Reports drawing attention</h2><p>Most viewed this month.</p><div className="usage-ranks">{top.map((item) => <div key={item.label}><span>{item.label}</span><strong>{item.value}</strong><i><b style={{ width: `${item.value / maxTop * 100}%` }} /></i></div>)}</div></section>
+      <section className="usage-panel"><h2>Where usage comes from</h2><p>Share of views by owning team.</p><div className="usage-teams">{byTeam.map((team) => <div key={team.team}><span>{team.team}</span><i><b style={{ width: `${team.views / teamTotal * 100}%` }} /></i><em>{Math.round(team.views / teamTotal * 100)}%</em></div>)}</div></section>
+      <section className="usage-panel usage-distribution"><h2>Engagement spread</h2><p>Reports by score band this month.</p><div>{distribution.map((bin) => <div key={bin.label}><i><b style={{ height: `${bin.count / maxBin * 100}%` }} /></i><strong>{bin.count}</strong><span>{bin.label}</span></div>)}</div></section>
+    </aside></div>
+    <footer className="note">Illustrative data for a fictional company — for direction review only.</footer>
+  </div></div>;
 }

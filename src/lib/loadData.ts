@@ -1,6 +1,4 @@
-import type {
-  ActivityCell, Customer, Employee, MrrRow, NorthbeamData, PeopleData, ReportDef, ReportViewRow, UsageData,
-} from './types';
+import type { ActivityCell, Customer, MrrRow, NorthbeamData, ReportDef, ReportViewRow, UsageData } from './types';
 
 function parseCsv(text: string): string[][] {
   return text
@@ -41,19 +39,6 @@ export async function loadNorthbeamData(): Promise<NorthbeamData> {
   }));
 
   return { customers, mrrRows, cac: cacJson };
-}
-
-export async function loadPeopleData(): Promise<PeopleData> {
-  const text = await fetch('/data/employees.csv').then((r) => r.text());
-  const [, ...rows] = parseCsv(text);
-  const employees: Employee[] = rows.map((r) => ({
-    employeeId: r[0],
-    department: r[1] as Employee['department'],
-    region: r[2] as Employee['region'],
-    hireMonth: r[3],
-    termMonth: r[4] || null,
-  }));
-  return { employees };
 }
 
 export async function loadUsageData(): Promise<UsageData> {

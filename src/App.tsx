@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-import { loadNorthbeamData, loadPeopleData, loadUsageData } from './lib/loadData';
-import type { AcquisitionChannel, NorthbeamData, PeopleData, Region, UsageData } from './lib/types';
+import { loadNorthbeamData, loadUsageData } from './lib/loadData';
+import type { AcquisitionChannel, NorthbeamData, Region, UsageData } from './lib/types';
 import {
   arrBridge, arrMixByChannel, computeKpis, logoChurnPct, monthLabel, monthList,
   netNewLogosByRegion, nrrTrailing12, topAccounts,
@@ -24,7 +24,6 @@ import { ArrMixDonut } from './components/ArrMixDonut';
 import { TopAccounts } from './components/TopAccounts';
 import { NewLogosHeatmap } from './components/NewLogosHeatmap';
 import { ActivityLog, type LogEntry } from './components/ActivityLog';
-import { PeopleDashboard } from './components/PeopleDashboard';
 import { UsageDashboard } from './components/UsageDashboard';
 import { ExploreDashboard } from './components/ExploreDashboard';
 import { buildRoomUrl, createRoomSession, parseRoomSession, type RoomSession } from './lib/roomSession';
@@ -355,13 +354,13 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
 export default function App() {
   const [report, setReport] = useState<ReportId>('revenue');
   const [session, setSession] = useState<RoomSession | null>(() => parseRoomSession(window.location.href));
-  const [data, setData] = useState<{ revenue: NorthbeamData; people: PeopleData; usage: UsageData } | null>(null);
+  const [data, setData] = useState<{ revenue: NorthbeamData; usage: UsageData } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
-    Promise.all([loadNorthbeamData(), loadPeopleData(), loadUsageData()])
-      .then(([revenue, people, usage]) => setData({ revenue, people, usage }))
+    Promise.all([loadNorthbeamData(), loadUsageData()])
+      .then(([revenue, usage]) => setData({ revenue, usage }))
       .catch((e) => setError(String(e)));
   }, [session]);
 
@@ -388,7 +387,6 @@ export default function App() {
   if (error) return <div className="northbeam"><div className="error">Failed to load data: {error}</div></div>;
   if (!data) return <div className="northbeam"><div className="loading">Loading Northbeam data…</div></div>;
 
-  if (report === 'people') return <PeopleDashboard data={data.people} report={report} onChangeReport={setReport} />;
   if (report === 'usage') return <UsageDashboard data={data.usage} report={report} onChangeReport={setReport} />;
   return <RevenueDashboard data={data.revenue} report={report} onChangeReport={setReport} session={session} />;
 }
