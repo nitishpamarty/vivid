@@ -1,0 +1,34 @@
+cubes:
+  - name: employees
+    sql_table: employees
+
+    measures:
+      - name: count
+        type: count
+
+      - name: active_count
+        type: count
+        filters:
+          - sql: "{CUBE}.term_month is null"
+
+    dimensions:
+      - name: employee_id
+        sql: employee_id
+        type: string
+        primary_key: true
+
+      - name: department
+        sql: department
+        type: string
+
+      - name: region
+        sql: region
+        type: string
+
+      - name: hire_month
+        sql: hire_month
+        type: time
+
+      - name: term_month
+        sql: term_month
+        type: time

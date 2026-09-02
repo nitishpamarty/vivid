@@ -9,7 +9,7 @@ export function ActivityLog({ entries }: { entries: LogEntry[] }) {
   return (
     <div className="card">
       <p className="panel-title">Activity</p>
-      <p className="panel-sub">Person and agent chart edits — an Agent line only appears when a registered tool call actually ran</p>
+      <p className="panel-sub">Shared application audit trail — Agent marks a WebMCP mutation request, not tamper-proof model provenance</p>
       {entries.length === 0 ? (
         <p className="log-empty">No activity yet.</p>
       ) : (

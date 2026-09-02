@@ -1,0 +1,25 @@
+cubes:
+  - name: reports
+    sql_table: reports
+
+    measures:
+      - name: count
+        type: count
+
+    dimensions:
+      - name: report_id
+        sql: report_id
+        type: string
+        primary_key: true
+
+      - name: name
+        sql: name
+        type: string
+
+      - name: owner_team
+        sql: owner_team
+        type: string
+
+      - name: created_month
+        sql: created_month
+        type: time

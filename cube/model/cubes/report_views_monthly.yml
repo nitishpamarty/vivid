@@ -1,0 +1,31 @@
+cubes:
+  - name: report_views_monthly
+    sql_table: report_views_monthly
+
+    joins:
+      - name: reports
+        relationship: many_to_one
+        sql: "{CUBE}.report_id = {reports}.report_id"
+
+    measures:
+      - name: total_views
+        sql: views
+        type: sum
+
+      - name: total_unique_viewers
+        sql: unique_viewers
+        type: sum
+
+      - name: avg_engagement_score
+        sql: engagement_score
+        type: avg
+
+    dimensions:
+      - name: report_id
+        sql: report_id
+        type: string
+        primary_key: true
+
+      - name: month
+        sql: month
+        type: time

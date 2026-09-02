@@ -42,7 +42,7 @@ const FILTER_FIELDS: Record<keyof ReportFilters, FilterFieldOption> = {
   planTier: { type: 'enum', values: PLAN_VALUES },
   channel: { type: 'enum', values: CHANNEL_VALUES },
   contractType: { type: 'enum', values: CONTRACT_VALUES },
-  accountName: { type: 'string', hint: 'a customer name from get_report_context\'s topAccounts, or "all" to clear' },
+  accountName: { type: 'string', hint: 'an exact known customer name from find_account_values, or "all" to clear' },
 };
 
 export const FILTER_OPTIONS = FILTER_FIELDS;
@@ -69,7 +69,7 @@ export function validateFilterPatch(patch: unknown, validAccountNames?: readonly
       return { ok: false, reason: 'invalid_value', error: `"${key}" must be one of ${opt.values.join(', ')}, got ${JSON.stringify(value)}.` };
     }
     if (key === 'accountName' && validAccountNames && value !== 'all' && !validAccountNames.includes(value)) {
-      return { ok: false, reason: 'invalid_value', error: `"${value}" is not a known customer name. Use "all" or a name from get_report_context's topAccounts.` };
+      return { ok: false, reason: 'invalid_value', error: `"${value}" is not a known customer name. Use "all" or an exact name from find_account_values.` };
     }
   }
   return { ok: true };

@@ -1,0 +1,53 @@
+cubes:
+  - name: mrr_monthly
+    sql_table: mrr_monthly
+
+    joins:
+      - name: customers
+        relationship: many_to_one
+        sql: "{CUBE}.customer_id = {customers}.customer_id"
+
+    measures:
+      - name: total_mrr
+        sql: mrr
+        type: sum
+
+      - name: new_mrr
+        sql: mrr
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_new = true"
+
+      - name: expansion_mrr
+        sql: mrr
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_expansion = true"
+
+      - name: contraction_mrr
+        sql: mrr
+        type: sum
+        filters:
+          - sql: "{CUBE}.is_contraction = true"
+
+      - name: new_customers
+        sql: customer_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_new = true"
+
+      - name: churned_customers
+        sql: customer_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_churned = true"
+
+    dimensions:
+      - name: customer_id
+        sql: customer_id
+        type: string
+        primary_key: true
+
+      - name: month
+        sql: month
+        type: time

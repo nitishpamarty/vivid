@@ -48,6 +48,9 @@ more than one.
     report-wide filters (`segment`, `region`, `planTier`, `accountName`);
     `"all"` clears one. Cross-filters all six panels, not just the two
     chart ids — see the Phase 3 bullet below.
+  - `find_account_values` (read-only) — returns a short list of exact
+    customer-name matches for account drill-down without expanding the
+    default report context beyond its top five.
   - `find_field_values` (read-only) — resolves a phrase to a canonical
     field value (a chart knob or a filter); always returns its best
     guess, no ambiguity/clarification round-trip with the user.
@@ -61,22 +64,18 @@ more than one.
     for how the registration path was verified without a WebMCP-capable
     browser (a devtools-injected `document.modelContext` polyfill, driving
     the real `registerTool` execute functions).
-- **Persistence (Phase 2, built; moved to Supabase since):** one
-  whole-dashboard JSON snapshot per report id (`DashboardState` = chart
-  knobs + filters, see [src/lib/chartState.ts](src/lib/chartState.ts)),
-  written on every successful mutating tool call, read back on load with a
-  schema version check (an unrecognized version falls back to defaults
-  rather than trusting stale shape — bumped to v2 when Phase 3 added
-  `filters` to the snapshot, then v3 when `accountName` was added to
-  `filters`; an older row is correctly discarded, not migrated). Originally
-  localStorage (per-browser only); now a single `dashboard_state` row in
-  Supabase Postgres, pushed to every open viewer over Supabase Realtime
-  (`subscribeDashboardState`) — this is what actually makes edits shared
-  across a presenter's screen and a separate viewer, not just persisted
-  within one browser. The Activity log (below) moved the same way, see
-  [src/lib/activityLog.ts](src/lib/activityLog.ts). Last-write-wins at the
-  row level; no multi-editor conflict resolution, since the app's own usage
-  pattern is one driver (person or agent) at a time.
+- **Persistence and shared sessions (in progress):** one whole-dashboard
+  JSON snapshot per room (`DashboardState` = chart knobs + filters, see
+  [src/lib/chartState.ts](src/lib/chartState.ts)), with a monotonically
+  increasing version. Reads and Supabase Realtime notifications are scoped by
+  room id. Browser mutations go through the `shared-state` Edge Function and
+  server-only Postgres RPC, which verifies a SHA-256 capability digest,
+  compare-and-swaps the expected version, updates state, and inserts the
+  activity row in one transaction. Direct anon/authenticated table writes are
+  denied by RLS. This is a no-login bearer-link demo: anyone holding the link
+  can edit, and the app cannot prove that an action came from a browser model.
+  The capability itself is never persisted or logged. Expiry/cleanup is an
+  operator responsibility; no scheduler is included.
 - **Undo (Phase 2, built):** the last ~10 snapshots kept in an array
   alongside the current one; undo pops the stack. Single stack, no
   branching redo, and it covers filter changes too — one undo after an
@@ -84,10 +83,8 @@ more than one.
   click. Triggered by a Person-lane "Undo" button in the topbar toolbar
   row.
 - **Person/Agent activity log (Phase 2, built — [src/components/ActivityLog.tsx](src/components/ActivityLog.tsx)):**
-  a dual-lane log that only records an "Agent" line when a real
-  `registerTool` execute function actually ran — never a
-  simulated/predicted call. This is the trust mechanism for the live-call
-  scenario.
+  a shared application audit trail. The server records one activity row per
+  accepted person or WebMCP mutation; it is not tamper-proof agent provenance.
 - **Functional filters + cross-filtering (Phase 3, built —
   [src/lib/reportFilters.ts](src/lib/reportFilters.ts); `channel`/
   `contractType` added afterward, on explicit direction):** six
@@ -116,9 +113,9 @@ more than one.
     (ignoring its own `accountName` filter), so it stays a stable picker
     you can switch between instead of collapsing to one row once
     something is selected. `get_report_context` exposes the current top-5
-    `{name, arr}` list so the agent has the exact strings
-    `set_report_filters.accountName` accepts, rather than needing to
-    fuzzy-match a company name itself.
+    `{name, arr}` list, and the `find_account_values` read-only WebMCP tool
+    returns up to eight exact matches for compact discovery. The validator
+    accepts any exact known customer name, not only the visible top five.
   - Both paths — dropdown/click and `set_report_filters` — go through the
     exact same `applyFilterPatch`, so a Person-lane log line and an
     Agent-lane one look the same except for the actor.
@@ -346,8 +343,9 @@ generated data, static/non-interactive, one report only. Dev server:
 `npm install && node scripts/generate-data.mjs && npm run dev`.
 
 **Built (Phase 2):** WebMCP tool registration (`get_report_context`,
-`list_report_options`, `update_chart_spec`, `find_field_values`), scoped to
-the ARR bridge and retention panels; localStorage persistence + undo; the
+`list_report_options`, `update_chart_spec`, `find_account_values`,
+`find_field_values`), scoped to
+the ARR bridge and retention panels; shared room persistence + undo; the
 Person/Agent activity log.
 
 **Built (Phase 3):** functional segment/region/planTier filters

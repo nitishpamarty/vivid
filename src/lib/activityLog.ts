@@ -17,32 +17,26 @@ function toEntry(row: LogRow): LogEntry {
   return { id: row.id, actor: row.actor, message: row.message, ts: new Date(row.created_at).toLocaleTimeString() };
 }
 
-export async function loadActivityLog(reportId: string = REPORT_ID): Promise<LogEntry[]> {
+export async function loadActivityLog(reportId: string = REPORT_ID, roomId?: string): Promise<LogEntry[]> {
+  if (!roomId) return [];
   const { data, error } = await supabase
     .from('activity_log')
     .select('id, actor, message, created_at')
     .eq('report_id', reportId)
+    .eq('room_id', roomId)
     .order('created_at', { ascending: true })
     .limit(50);
   if (error || !data) return [];
   return (data as LogRow[]).map(toEntry);
 }
 
-export function insertActivityLog(actor: LogEntry['actor'], message: string, reportId: string = REPORT_ID): void {
-  supabase
-    .from('activity_log')
-    .insert({ report_id: reportId, actor, message })
-    .then(({ error }) => {
-      if (error) console.error('insertActivityLog failed', error);
-    });
-}
-
-export function subscribeActivityLog(onInsert: (entry: LogEntry) => void, reportId: string = REPORT_ID): () => void {
+export function subscribeActivityLog(onInsert: (entry: LogEntry) => void, reportId: string = REPORT_ID, roomId?: string): () => void {
+  if (!roomId) return () => {};
   const channel = supabase
-    .channel(`activity_log:${reportId}`)
+    .channel(`activity_log:${roomId}:${reportId}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'activity_log', filter: `report_id=eq.${reportId}` },
+      { event: 'INSERT', schema: 'public', table: 'activity_log', filter: `room_id=eq.${roomId}` },
       (payload) => onInsert(toEntry(payload.new as LogRow)),
     )
     .subscribe();

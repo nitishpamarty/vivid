@@ -1,0 +1,14 @@
+cubes:
+  - name: cac_monthly
+    sql_table: cac_monthly
+
+    measures:
+      - name: avg_cac
+        sql: cac
+        type: avg
+
+    dimensions:
+      - name: month
+        sql: month
+        type: time
+        primary_key: true

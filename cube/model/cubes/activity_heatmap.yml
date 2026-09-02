@@ -1,0 +1,19 @@
+cubes:
+  - name: activity_heatmap
+    sql_table: activity_heatmap
+
+    measures:
+      - name: total_views
+        sql: views
+        type: sum
+
+    dimensions:
+      - name: weekday
+        sql: weekday
+        type: string
+        primary_key: true
+
+      - name: hour_bucket
+        sql: hour_bucket
+        type: string
+        primary_key: true

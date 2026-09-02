@@ -1,0 +1,45 @@
+cubes:
+  - name: customers
+    sql_table: customers
+
+    measures:
+      - name: count
+        type: count
+
+    dimensions:
+      - name: customer_id
+        sql: customer_id
+        type: string
+        primary_key: true
+
+      - name: name
+        sql: name
+        type: string
+
+      - name: segment
+        sql: segment
+        type: string
+
+      - name: plan_tier
+        sql: plan_tier
+        type: string
+
+      - name: region
+        sql: region
+        type: string
+
+      - name: channel
+        sql: channel
+        type: string
+
+      - name: contract_type
+        sql: contract_type
+        type: string
+
+      - name: signup_month
+        sql: signup_month
+        type: time
+
+      - name: churn_month
+        sql: churn_month
+        type: time

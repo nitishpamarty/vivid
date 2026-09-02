@@ -3,114 +3,15 @@
 // (see vegaSpecs.ts) — this is the "chart-as-data not chart-as-code" state
 // that persistence, undo, and the WebMCP tools all operate on.
 
-import { PALETTE, BRAND } from './palette.ts';
 import { DEFAULT_FILTERS, type ReportFilters } from './reportFilters.ts';
 import { supabase } from './supabase.ts';
 import type { Region, Segment } from './types.ts';
-
-export type ChartId = 'arr_bridge' | 'retention_nrr' | 'retention_churn';
-export const CHART_IDS: ChartId[] = ['arr_bridge', 'retention_nrr', 'retention_churn'];
-
-export type SwatchKey = 'good' | 'critical' | 'brand' | 'cat2' | 'cat3';
-export const SWATCH_KEYS: SwatchKey[] = ['good', 'critical', 'brand', 'cat2', 'cat3'];
-
-const SWATCH_HEX: Record<SwatchKey, string> = {
-  good: PALETTE.good, critical: PALETTE.critical, brand: BRAND, cat2: PALETTE.cat2, cat3: PALETTE.cat3,
-};
-export function swatchHex(key: SwatchKey): string {
-  return SWATCH_HEX[key];
-}
-
-export type WindowMonths = 6 | 12 | 24;
-export const WINDOW_OPTIONS: WindowMonths[] = [6, 12, 24];
-
-export interface ArrBridgeKnobs {
-  windowMonths: WindowMonths;
-  positiveColor: SwatchKey;
-  negativeColor: SwatchKey;
-  barWidth: number; // band fraction, 0.4-0.8
-}
-
-export interface RetentionLineKnobs {
-  windowMonths: WindowMonths;
-  lineColor: SwatchKey;
-}
-
-export interface ChartState {
-  arr_bridge: ArrBridgeKnobs;
-  retention_nrr: RetentionLineKnobs;
-  retention_churn: RetentionLineKnobs;
-}
-
-export const DEFAULT_CHART_STATE: ChartState = {
-  arr_bridge: { windowMonths: 12, positiveColor: 'good', negativeColor: 'critical', barWidth: 0.62 },
-  retention_nrr: { windowMonths: 12, lineColor: 'brand' },
-  retention_churn: { windowMonths: 12, lineColor: 'critical' },
-};
-
-// The mark/encoding/field allow-list per chart — the single source of truth
-// for both list_report_options and update_chart_spec's validator.
-type FieldOption =
-  | { type: 'enum'; values: readonly (string | number)[] }
-  | { type: 'range'; min: number; max: number; step: number };
-
-interface ChartOptions {
-  mark: string; // fixed — never a patchable field, enforces the "never dual-axis" invariants
-  fields: Record<string, FieldOption>;
-}
-
-const BRIDGE_FIELDS: Record<keyof ArrBridgeKnobs, FieldOption> = {
-  windowMonths: { type: 'enum', values: WINDOW_OPTIONS },
-  positiveColor: { type: 'enum', values: SWATCH_KEYS },
-  negativeColor: { type: 'enum', values: SWATCH_KEYS },
-  barWidth: { type: 'range', min: 0.4, max: 0.8, step: 0.02 },
-};
-
-const LINE_FIELDS: Record<keyof RetentionLineKnobs, FieldOption> = {
-  windowMonths: { type: 'enum', values: WINDOW_OPTIONS },
-  lineColor: { type: 'enum', values: SWATCH_KEYS },
-};
-
-export const CHART_OPTIONS: Record<ChartId, ChartOptions> = {
-  arr_bridge: { mark: 'bar', fields: BRIDGE_FIELDS },
-  retention_nrr: { mark: 'line', fields: LINE_FIELDS },
-  retention_churn: { mark: 'line', fields: LINE_FIELDS },
-};
-
-export type PatchResult =
-  | { ok: true }
-  | { ok: false; reason: string; error: string };
-
-export function validatePatch(chartId: string, patch: unknown): PatchResult {
-  if (!CHART_IDS.includes(chartId as ChartId)) {
-    return { ok: false, reason: 'unknown_chart', error: `"${chartId}" is not an agent-editable chart. Valid ids: ${CHART_IDS.join(', ')}.` };
-  }
-  if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-    return { ok: false, reason: 'invalid_patch', error: 'patch must be an object of field: value pairs.' };
-  }
-  const entries = Object.entries(patch as Record<string, unknown>);
-  if (entries.length === 0) {
-    return { ok: false, reason: 'empty_patch', error: 'patch has no fields to apply.' };
-  }
-  const options = CHART_OPTIONS[chartId as ChartId].fields;
-  for (const [key, value] of entries) {
-    const opt = options[key];
-    if (!opt) {
-      return { ok: false, reason: 'unknown_field', error: `"${key}" is not editable on ${chartId}. Editable fields: ${Object.keys(options).join(', ')}.` };
-    }
-    if (opt.type === 'enum' && !opt.values.includes(value as string | number)) {
-      return { ok: false, reason: 'invalid_value', error: `"${key}" must be one of ${opt.values.join(', ')}, got ${JSON.stringify(value)}.` };
-    }
-    if (opt.type === 'range') {
-      const steps = (value as number - opt.min) / opt.step;
-      const offStep = typeof value !== 'number' || Number.isNaN(steps) || Math.abs(steps - Math.round(steps)) > 1e-9;
-      if (typeof value !== 'number' || value < opt.min || value > opt.max || offStep) {
-        return { ok: false, reason: 'invalid_value', error: `"${key}" must be a multiple of ${opt.step} between ${opt.min} and ${opt.max}, got ${JSON.stringify(value)}.` };
-      }
-    }
-  }
-  return { ok: true };
-}
+export {
+  CHART_IDS, CHART_OPTIONS, DEFAULT_CHART_STATE, SWATCH_KEYS, WINDOW_OPTIONS, swatchHex, validatePatch,
+  type ArrBridgeKnobs, type ChartId, type ChartState, type PatchResult, type RetentionLineKnobs, type SwatchKey,
+  type WindowMonths,
+} from './chartValidation.ts';
+import { DEFAULT_CHART_STATE, WINDOW_OPTIONS, type ChartState, type SwatchKey, type WindowMonths } from './chartValidation.ts';
 
 // ---- whole-dashboard state: the two chart panels' knobs + the report-wide filters ----
 // One persisted/undo unit, since both are "edits to the dashboard" a viewer
@@ -123,42 +24,49 @@ export interface DashboardState {
 
 export const DEFAULT_DASHBOARD_STATE: DashboardState = { charts: DEFAULT_CHART_STATE, filters: DEFAULT_FILTERS };
 
-// ---- Supabase persistence: one row per report id, schema-versioned, realtime-synced across viewers ----
+// ---- Supabase reads: room-scoped, versioned, realtime-synced across viewers ----
 
 const SCHEMA_VERSION = 4; // v2 added `filters`; v3 added `filters.accountName`; v4 added `filters.channel`/`filters.contractType` — older rows are rejected below, not migrated
 const REPORT_ID = 'northbeam';
 
-export async function loadDashboardState(reportId: string = REPORT_ID): Promise<DashboardState> {
+export interface DashboardSnapshot {
+  state: DashboardState;
+  version: number;
+}
+
+export async function loadDashboardSnapshot(reportId: string = REPORT_ID, roomId?: string): Promise<DashboardSnapshot> {
+  if (!roomId) return { state: DEFAULT_DASHBOARD_STATE, version: 0 };
   const { data, error } = await supabase
     .from('dashboard_state')
-    .select('schema_version, state')
+    .select('schema_version, version, state')
     .eq('report_id', reportId)
+    .eq('room_id', roomId)
     .maybeSingle();
-  if (error || !data || data.schema_version !== SCHEMA_VERSION) return DEFAULT_DASHBOARD_STATE;
-  return data.state as DashboardState;
+  if (error) throw new Error('Shared dashboard is unavailable.');
+  if (!data || data.schema_version !== SCHEMA_VERSION || typeof data.version !== 'number') {
+    throw new Error('Shared dashboard state is unavailable.');
+  }
+  return { state: data.state as DashboardState, version: data.version };
 }
 
-export function saveDashboardState(state: DashboardState, actor: 'person' | 'agent', reportId: string = REPORT_ID): void {
-  supabase
-    .from('dashboard_state')
-    .update({ state, updated_by: actor, updated_at: new Date().toISOString() })
-    .eq('report_id', reportId)
-    .then(({ error }) => {
-      // ponytail: best-effort — a dropped write just means the next edit re-syncs from local state; not load-bearing for the demo
-      if (error) console.error('saveDashboardState failed', error);
-    });
+export async function loadDashboardState(reportId: string = REPORT_ID, roomId?: string): Promise<DashboardState> {
+  return (await loadDashboardSnapshot(reportId, roomId)).state;
 }
 
-// Pushes every remote update (including this client's own, echoed back) — cheap no-op when it matches what's already local.
-export function subscribeDashboardState(onChange: (state: DashboardState) => void, reportId: string = REPORT_ID): () => void {
+// Pushes every remote update (including this client's own, echoed back).
+export function subscribeDashboardState(onChange: (state: DashboardState, version: number) => void, reportId: string = REPORT_ID, roomId?: string, onStatus?: (status: 'subscribed' | 'unavailable') => void): () => void {
+  if (!roomId) return () => {};
   const channel = supabase
-    .channel(`dashboard_state:${reportId}`)
+    .channel(`dashboard_state:${roomId}:${reportId}`)
     .on(
       'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'dashboard_state', filter: `report_id=eq.${reportId}` },
-      (payload) => onChange(payload.new.state as DashboardState),
+      { event: 'UPDATE', schema: 'public', table: 'dashboard_state', filter: `room_id=eq.${roomId}` },
+      (payload) => onChange(payload.new.state as DashboardState, Number(payload.new.version)),
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') onStatus?.('subscribed');
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') onStatus?.('unavailable');
+    });
   return () => { supabase.removeChannel(channel); };
 }
 

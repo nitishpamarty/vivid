@@ -3,7 +3,7 @@
 // and dashboard state, so this is the one check ponytail leaves behind.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validatePatch } from './chartState.ts';
+import { validatePatch } from './chartValidation.ts';
 import { validateFilterPatch } from './reportFilters.ts';
 
 test('validatePatch accepts a valid enum and range value', () => {
@@ -50,12 +50,13 @@ test('validateFilterPatch rejects an unknown field', () => {
   assert.equal((result as { reason: string }).reason, 'unknown_field');
 });
 
-test('validateFilterPatch rejects an accountName not in the known list', () => {
+test('validateFilterPatch rejects an accountName not in the known list and points to discovery', () => {
   const result = validateFilterPatch({ accountName: 'Acme' }, ['Globex']);
   assert.equal(result.ok, false);
   assert.equal((result as { reason: string }).reason, 'invalid_value');
+  assert.match((result as { error: string }).error, /find_account_values/);
 });
 
-test('validateFilterPatch accepts a known accountName', () => {
+test('validateFilterPatch accepts any exact known accountName', () => {
   assert.equal(validateFilterPatch({ accountName: 'Globex' }, ['Globex']).ok, true);
 });

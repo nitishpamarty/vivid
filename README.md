@@ -17,15 +17,16 @@ turning the three hand-coded reports into that abstraction themselves.
 generated CSVs (`data/customers.csv`, `data/mrr_monthly.csv`).
 
 **Phase 2 built**: WebMCP tools (`get_report_context`, `list_report_options`,
-`update_chart_spec`, `find_field_values`) scoped to the ARR bridge and
+`update_chart_spec`, `find_account_values`, `find_field_values`) scoped to the ARR bridge and
 retention panels, persistence + undo, and the Person/Agent activity log.
 
-**Shared persistence built**: dashboard state and the activity log live in
-Supabase (Postgres) instead of localStorage, synced to every open viewer in
-realtime — see [AGENTS.md](AGENTS.md)'s Persistence entry and
-[src/lib/chartState.ts](src/lib/chartState.ts) /
-[src/lib/activityLog.ts](src/lib/activityLog.ts). Undo stays local per
-browser (not centralized — see AGENTS.md).
+**Shared sessions in progress**: room state is keyed by a URL-fragment
+capability. Browser mutations go through the `shared-state` Edge Function and
+server-only RPC (never direct table writes); reads remain room-scoped Supabase
+queries/realtime subscriptions. Revenue account filtering accepts any exact
+known customer name; `find_account_values` returns a short matching list when
+the name is not in the visible top-five context. This is a bearer-link demo:
+it is not proof of browser-model identity.
 
 **Phase 3 built**: functional segment/region/plan filters — dropdowns plus
 click-to-filter on the ARR-mix donut and net-new-logos heatmap — that
@@ -62,7 +63,8 @@ generalization of them — see AGENTS.md's "Connect Data" section.
 - Plain SVG/CSS for the rest
 - Supabase (Postgres + Realtime) for shared dashboard state and the activity
   log, and (separately) for the 7 real tables the Connect Data screen reads
-  — no custom backend, the browser talks to it directly
+  — browser reads are direct; shared mutations use the narrow Edge Function
+  boundary
 - ponytail plugin active in this repo (project-scoped — see
   [.claude/settings.json](.claude/settings.json))
 
@@ -84,9 +86,17 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable key>
 ```
 
-The project needs the `dashboard_state` and `activity_log` tables from
-AGENTS.md's Persistence entry, with `report_id = 'northbeam'` seeded and
-both tables added to the `supabase_realtime` publication.
+The project needs the per-session tables and RPCs from
+[supabase/migrations/0002_shared_sessions.sql](supabase/migrations/0002_shared_sessions.sql),
+and [supabase/migrations/0003_shared_state_rpc.sql](supabase/migrations/0003_shared_state_rpc.sql),
+plus deployment of [supabase/functions/shared-state/index.ts](supabase/functions/shared-state/index.ts).
+Add `dashboard_state` and `activity_log` to the `supabase_realtime`
+publication. The browser receives a room id and write capability only in the
+URL fragment (`#room=...&key=...`); the capability is never stored in the
+database or activity log. Start from the landing page to create a fresh room.
+For this no-login demo, links should be treated as bearer editor access; plan
+to expire old rooms and delete their rows periodically using an operator
+cleanup job or SQL, but no scheduler is included here.
 
 For the Connect Data tab, also run
 [supabase/migrations/0001_connect_data.sql](supabase/migrations/0001_connect_data.sql)

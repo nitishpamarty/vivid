@@ -9,11 +9,12 @@ import {
 import { PALETTE, BRAND } from './lib/palette';
 import {
   type ChartId, type DashboardState, DEFAULT_DASHBOARD_STATE,
-  loadDashboardState, saveDashboardState, subscribeDashboardState, swatchHex,
+  loadDashboardSnapshot, subscribeDashboardState, swatchHex,
 } from './lib/chartState';
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
-import { insertActivityLog, loadActivityLog, subscribeActivityLog } from './lib/activityLog';
+import { getBusinessDefinitions, queryBusinessMetric } from './lib/semanticLayerClient';
+import { loadActivityLog, subscribeActivityLog } from './lib/activityLog';
 import { Topbar, type ReportId } from './components/Topbar';
 import { Filters } from './components/Filters';
 import { KpiRow } from './components/KpiRow';
@@ -26,8 +27,12 @@ import { ActivityLog, type LogEntry } from './components/ActivityLog';
 import { PeopleDashboard } from './components/PeopleDashboard';
 import { UsageDashboard } from './components/UsageDashboard';
 import { ExploreDashboard } from './components/ExploreDashboard';
+import { buildRoomUrl, createRoomSession, parseRoomSession, type RoomSession } from './lib/roomSession';
+import { createSharedRoom, mutateSharedState } from './lib/sharedStateClient';
+import { mutationBlockReason, shouldApplyVersion, type SharedStatus } from './lib/sharedStateLifecycle';
+import { addUndoFrame, invalidateUndoFrames, popUndoFrame, type UndoFrame } from './lib/undoState';
 
-function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamData; report: ReportId; onChangeReport: (r: ReportId) => void }) {
+function RevenueDashboard({ data, report, onChangeReport, session }: { data: NorthbeamData; report: ReportId; onChangeReport: (r: ReportId) => void; session: RoomSession }) {
   // Calendar axis stays derived from the unfiltered data so windowing
   // (arrBridge/retention slice(-N)) is stable regardless of active filters —
   // only the rows feeding each metric are filtered, never the month list.
@@ -35,115 +40,174 @@ function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamDat
   const latest = months[months.length - 1];
 
   const [dashboard, setDashboard] = useState<DashboardState>(DEFAULT_DASHBOARD_STATE);
-  const [undoStack, setUndoStack] = useState<DashboardState[]>([]);
+  const [version, setVersion] = useState(0);
+  const [sharedStatus, setSharedStatus] = useState<SharedStatus>('connecting');
+  const [undoStack, setUndoStack] = useState<UndoFrame[]>([]);
+  const [undoNotice, setUndoNotice] = useState('');
   const [log, setLog] = useState<LogEntry[]>([]);
   const dashboardRef = useRef(dashboard);
   dashboardRef.current = dashboard;
+  const versionRef = useRef(version);
+  versionRef.current = version;
   const undoStackRef = useRef(undoStack);
   undoStackRef.current = undoStack;
 
   const { charts: chartState, filters } = dashboard;
 
-  // Hydrate from Supabase on mount, then stay synced: another viewer's edit
-  // (or the agent, from a different tab) arrives here the same way this
-  // tab's own writes echo back — see subscribeDashboardState's doc comment.
+  // Subscribe before fetching. A newer Realtime event must not be overwritten
+  // by the initial fetch that was already in flight.
   useEffect(() => {
-    loadDashboardState().then((state) => {
+    let active = true;
+    let fetchReady = false;
+    let realtimeReady = false;
+    let connectionFailed = false;
+    setSharedStatus('connecting');
+    const markReady = () => {
+      if (active && fetchReady && realtimeReady && !connectionFailed) setSharedStatus('ready');
+    };
+    const applySnapshot = (state: DashboardState, nextVersion: number) => {
+      if (!active || !shouldApplyVersion(versionRef.current, nextVersion)) return;
+      if (nextVersion > versionRef.current) {
+        const remaining = invalidateUndoFrames(undoStackRef.current, nextVersion);
+        if (remaining.length !== undoStackRef.current.length) setUndoNotice('Dashboard changed elsewhere; Undo history cleared.');
+        undoStackRef.current = remaining;
+        setUndoStack(remaining);
+      }
+      versionRef.current = nextVersion;
       dashboardRef.current = state;
+      setVersion(nextVersion);
       setDashboard(state);
-    });
-    loadActivityLog().then(setLog);
-    const unsubState = subscribeDashboardState((state) => {
-      dashboardRef.current = state;
-      setDashboard(state);
+      markReady();
+    };
+    loadActivityLog('northbeam', session.roomId).then(setLog);
+    const unsubState = subscribeDashboardState((state, nextVersion) => {
+      applySnapshot(state, nextVersion);
+    }, 'northbeam', session.roomId, (status) => {
+      if (!active) return;
+      if (status === 'unavailable') {
+        connectionFailed = true;
+        setSharedStatus('unavailable');
+      } else {
+        realtimeReady = true;
+        markReady();
+      }
     });
     const unsubLog = subscribeActivityLog((entry) => {
       setLog((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry].slice(-50)));
-    });
-    return () => { unsubState(); unsubLog(); };
-  }, []);
+    }, 'northbeam', session.roomId);
+    void createSharedRoom(session, DEFAULT_DASHBOARD_STATE, 4)
+      .then((result) => {
+        if (!active || !result.ok) throw new Error('unavailable');
+        return loadDashboardSnapshot('northbeam', session.roomId);
+      })
+      .then((snapshot) => {
+        fetchReady = true;
+        applySnapshot(snapshot.state, snapshot.version);
+        markReady();
+      })
+      .catch(() => { if (active) setSharedStatus('unavailable'); });
+    return () => { active = false; unsubState(); unsubLog(); };
+  }, [session.roomId]);
 
-  const addLog = useCallback((actor: LogEntry['actor'], message: string) => {
-    insertActivityLog(actor, message);
-  }, []);
-
-  // Tool calls (and clicks) can arrive back-to-back with no render committed
-  // in between, so dashboardRef/undoStackRef are written here synchronously —
-  // they're the source of truth these read from, not whatever the last render saw.
-  const applyChartPatch = useCallback((chartId: ChartId, patch: Record<string, unknown>, actor: 'person' | 'agent' = 'person') => {
+  // The server accepts the mutation only when this version is still current.
+  const applySharedMutation = useCallback(async (mutation: Parameters<typeof mutateSharedState>[2], recordUndo = true) => {
+    const blockReason = mutationBlockReason(sharedStatus);
+    if (blockReason) throw new Error(blockReason);
     const current = dashboardRef.current;
-    const next = { ...current, charts: { ...current.charts, [chartId]: { ...current.charts[chartId], ...patch } } };
-    undoStackRef.current = [...undoStackRef.current, current].slice(-10);
-    dashboardRef.current = next;
+    const expectedVersion = versionRef.current;
+    let result: Awaited<ReturnType<typeof mutateSharedState>>;
+    result = await mutateSharedState(session, expectedVersion, mutation);
+    if (!result.ok) {
+      const error = new Error(result.error);
+      error.name = result.reason;
+      throw error;
+    }
+    if (recordUndo && mutation.kind !== 'undo') {
+      undoStackRef.current = addUndoFrame(undoStackRef.current, current, result.data.version, mutation);
+    }
+    dashboardRef.current = result.data.state;
+    versionRef.current = result.data.version;
+    setVersion(result.data.version);
     setUndoStack(undoStackRef.current);
-    setDashboard(next);
-    saveDashboardState(next, actor);
-    return next.charts[chartId];
-  }, []);
+    setUndoNotice('');
+    setDashboard(result.data.state);
+    setLog((prev) => prev.some((entry) => entry.id === result.data.activity.id) ? prev : [...prev, result.data.activity].slice(-50));
+    return result.data;
+  }, [session, sharedStatus]);
 
-  const applyFilterPatch = useCallback((patch: Record<string, unknown>, actor: 'person' | 'agent' = 'person') => {
-    const current = dashboardRef.current;
-    const next = { ...current, filters: { ...current.filters, ...patch } };
-    undoStackRef.current = [...undoStackRef.current, current].slice(-10);
-    dashboardRef.current = next;
-    setUndoStack(undoStackRef.current);
-    setDashboard(next);
-    saveDashboardState(next, actor);
-    return next.filters;
-  }, []);
+  const applyChartPatch = useCallback(async (chartId: ChartId, patch: Record<string, unknown>, actor: 'person' | 'agent' = 'person') => {
+    const result = await applySharedMutation({ kind: 'chart_patch', chartId, patch, actor });
+    return result.state.charts[chartId];
+  }, [applySharedMutation]);
+
+  const applyFilterPatch = useCallback(async (patch: Record<string, unknown>, actor: 'person' | 'agent' = 'person') => {
+    const result = await applySharedMutation({ kind: 'filter_patch', patch, actor });
+    return result.state.filters;
+  }, [applySharedMutation]);
 
   useEffect(() => {
+    if (sharedStatus !== 'ready') return;
     const bridge = {
       getChartState: () => dashboardRef.current.charts,
       applyChartPatch: (chartId: ChartId, patch: Record<string, unknown>) => applyChartPatch(chartId, patch, 'agent'),
       getFilters: () => dashboardRef.current.filters,
       applyFilterPatch: (patch: Record<string, unknown>) => applyFilterPatch(patch, 'agent'),
       getTopAccounts: () => accountsRef.current,
+      getAccountMatches: (query: string) => accountDirectoryRef.current
+        .filter((account) => account.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
       getValidAccountNames: () => data.customers.map((c) => c.name),
-      logAgent: (message: string) => addLog('agent', message),
+      getBusinessDefinitions,
+      queryBusinessMetric,
     };
     // A real WebMCP browser injects document.modelContext at document_start, before this
     // effect runs. This re-entry point exists only so evidence/README.md's manual loop can
     // be driven from devtools in a browser that doesn't have that extension.
     (window as unknown as { __vividRegisterTools?: () => () => void }).__vividRegisterTools = () => registerNorthbeamTools(bridge);
     return registerNorthbeamTools(bridge);
-  }, [applyChartPatch, applyFilterPatch, addLog]);
+  }, [applyChartPatch, applyFilterPatch, sharedStatus]);
 
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;
     if (stack.length === 0) return;
-    const restored = stack[stack.length - 1];
-    undoStackRef.current = stack.slice(0, -1);
-    dashboardRef.current = restored;
-    setUndoStack(undoStackRef.current);
-    setDashboard(restored);
-    saveDashboardState(restored, 'person');
-    addLog('person', 'undid last edit');
-  }, [addLog]);
+    const frame = stack[stack.length - 1];
+    if (frame.resultingVersion !== versionRef.current) {
+      undoStackRef.current = [];
+      setUndoStack([]);
+      setUndoNotice('Dashboard changed elsewhere; Undo was cleared.');
+      return;
+    }
+    void applySharedMutation({ kind: 'undo', actor: 'person', restoreState: frame.state, undoOfVersion: frame.resultingVersion }, false)
+      .then(() => {
+        undoStackRef.current = popUndoFrame(undoStackRef.current);
+        setUndoStack(undoStackRef.current);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === 'conflict') {
+          undoStackRef.current = [];
+          setUndoStack([]);
+          setUndoNotice('Dashboard changed elsewhere; Undo was rejected.');
+        }
+      });
+  }, [applySharedMutation]);
 
   const handleFilterChange = useCallback((patch: Partial<ReportFilters>) => {
-    applyFilterPatch(patch);
-    const [[key, value]] = Object.entries(patch);
-    addLog('person', `set ${key} filter to ${value}`);
-  }, [applyFilterPatch, addLog]);
+    void applyFilterPatch(patch).catch(() => {});
+  }, [applyFilterPatch]);
 
   const handleToggleChannel = useCallback((channel: AcquisitionChannel) => {
     const next = dashboardRef.current.filters.channel === channel ? 'all' : channel;
-    applyFilterPatch({ channel: next });
-    addLog('person', next === 'all' ? 'cleared channel filter (clicked ARR mix)' : `set channel filter to ${next} (clicked ARR mix)`);
-  }, [applyFilterPatch, addLog]);
+    void applyFilterPatch({ channel: next }).catch(() => {});
+  }, [applyFilterPatch]);
 
   const handleToggleRegion = useCallback((region: Region) => {
     const next = dashboardRef.current.filters.region === region ? 'all' : region;
-    applyFilterPatch({ region: next });
-    addLog('person', next === 'all' ? 'cleared region filter (clicked heatmap)' : `set region filter to ${next} (clicked heatmap)`);
-  }, [applyFilterPatch, addLog]);
+    void applyFilterPatch({ region: next }).catch(() => {});
+  }, [applyFilterPatch]);
 
   const handleToggleAccount = useCallback((name: string) => {
     const next = dashboardRef.current.filters.accountName === name ? 'all' : name;
-    applyFilterPatch({ accountName: next });
-    addLog('person', next === 'all' ? 'cleared account filter (clicked top accounts)' : `set account filter to ${next} (clicked top accounts)`);
-  }, [applyFilterPatch, addLog]);
+    void applyFilterPatch({ accountName: next }).catch(() => {});
+  }, [applyFilterPatch]);
 
   const filteredData = useMemo(() => applyReportFilters(data, filters), [data, filters]);
   const kpis = useMemo(() => computeKpis(filteredData), [filteredData]);
@@ -181,20 +245,42 @@ function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamDat
   ];
 
   const accounts = topAccounts(accountPickerData, latest, 5);
-  // The tool bridge is only re-registered when applyChartPatch/applyFilterPatch/
-  // addLog change (effectively once) — accounts changes every render, so
+  // The tool bridge is only re-registered when the mutation handlers change —
+  // accounts changes every render, so
   // getTopAccounts must read it through a ref, not close over the value.
   const accountsRef = useRef(accounts);
   accountsRef.current = accounts;
+  const accountDirectory = useMemo(() => {
+    const currentArr = new Map(
+      data.mrrRows.filter((row) => row.month === latest).map((row) => [row.customerId, row.mrr * 12]),
+    );
+    return data.customers.map((customer) => ({ name: customer.name, arr: currentArr.get(customer.customerId) ?? 0 }));
+  }, [data, latest]);
+  const accountDirectoryRef = useRef(accountDirectory);
+  accountDirectoryRef.current = accountDirectory;
 
   const last6 = months.slice(-6);
   const last6Labels = last6.map(monthLabel);
   const heatmap = netNewLogosByRegion(filteredData, last6);
 
+  if (sharedStatus !== 'ready') {
+    return (
+      <div className="northbeam" data-report={report}>
+        <div className="shell"><Topbar report={report} onChangeReport={onChangeReport} />
+          <div className="shared-status-card card" data-shared-status={sharedStatus}>
+            <p className="panel-title">Shared session {sharedStatus === 'connecting' ? 'connecting…' : 'unavailable'}</p>
+            <p className="panel-sub">{sharedStatus === 'connecting' ? 'Loading the authoritative room state.' : 'The room could not be reached. No local fallback is being shown.'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="northbeam" data-report={report}>
       <div className="shell">
         <Topbar report={report} onChangeReport={onChangeReport} />
+        <div className="shared-status" aria-label="Shared session status">Live shared session · v{version}</div>
         <div className="toolbar-row">
           <div className="filters-wrap">
             <Filters filters={filters} onChange={handleFilterChange} />
@@ -207,6 +293,7 @@ function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamDat
           <button type="button" className="undo-btn" disabled={undoStack.length === 0} onClick={handleUndo}>
             Undo{undoStack.length > 0 ? ` (${undoStack.length})` : ''}
           </button>
+          {undoNotice && <span className="undo-notice" role="status">{undoNotice}</span>}
         </div>
 
         <KpiRow
@@ -267,14 +354,34 @@ function RevenueDashboard({ data, report, onChangeReport }: { data: NorthbeamDat
 
 export default function App() {
   const [report, setReport] = useState<ReportId>('revenue');
+  const [session, setSession] = useState<RoomSession | null>(() => parseRoomSession(window.location.href));
   const [data, setData] = useState<{ revenue: NorthbeamData; people: PeopleData; usage: UsageData } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!session) return;
     Promise.all([loadNorthbeamData(), loadPeopleData(), loadUsageData()])
       .then(([revenue, people, usage]) => setData({ revenue, people, usage }))
       .catch((e) => setError(String(e)));
-  }, []);
+  }, [session]);
+
+  if (!session) {
+    return (
+      <div className="northbeam session-landing">
+        <div className="landing-card card">
+          <div className="brand"><div className="mark" aria-hidden="true">V</div><div><div className="name">Vivid</div><div className="sub">Shared analytics workspace</div></div></div>
+          <h1>Start a live dashboard session</h1>
+          <p>This demo uses a private link for each session. Start one, then share this browser URL with your viewer.</p>
+          <button type="button" className="start-session-btn" onClick={() => {
+            const next = createRoomSession();
+            window.history.replaceState(null, '', buildRoomUrl(window.location.href, next));
+            setSession(next);
+          }}>Start live session</button>
+          <p className="landing-note">No login. Anyone with the link can edit this fictional dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (report === 'explore') return <ExploreDashboard report={report} onChangeReport={setReport} />;
 
@@ -283,5 +390,5 @@ export default function App() {
 
   if (report === 'people') return <PeopleDashboard data={data.people} report={report} onChangeReport={setReport} />;
   if (report === 'usage') return <UsageDashboard data={data.usage} report={report} onChangeReport={setReport} />;
-  return <RevenueDashboard data={data.revenue} report={report} onChangeReport={setReport} />;
+  return <RevenueDashboard data={data.revenue} report={report} onChangeReport={setReport} session={session} />;
 }

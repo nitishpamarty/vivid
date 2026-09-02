@@ -1,0 +1,8 @@
+services:
+  cube:
+    image: cubejs/cube:latest
+    ports:
+      - "4000:4000" # REST/GraphQL API + dev Playground
+    env_file: .env
+    volumes:
+      - .:/cube/conf
