@@ -43,6 +43,7 @@ export function Heatmap({ columns, rows, mode, formatCell, activeRow, onToggleRo
           <button
             type="button"
             className={`hrow-label ${onToggleRow ? 'filterable' : ''} ${activeRow === row.label ? 'active' : ''}`}
+            aria-pressed={activeRow === row.label}
             onClick={() => onToggleRow?.(row.label)}
             disabled={!onToggleRow}
           >

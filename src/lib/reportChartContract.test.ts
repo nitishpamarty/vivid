@@ -22,9 +22,13 @@ test('accepts only the approved intent contract and rejects raw escape hatches',
   assert.deepEqual(validateReportChartContract({ version: 1, chartId: 'top_accounts', presentation: 'bar' }), {
     ok: true, data: { version: 1, chartId: 'top_accounts', presentation: 'bar' },
   });
+  assert.deepEqual(validateReportChartContract({ version: 1, chartId: 'net_new_logos', presentation: 'bar' }), {
+    ok: true, data: { version: 1, chartId: 'net_new_logos', presentation: 'bar' },
+  });
   for (const bad of [
     { version: 2, chartId: 'arr_mix', presentation: 'donut' },
     { version: 1, chartId: 'arr_bridge', presentation: 'bar' },
+    { version: 1, chartId: 'net_new_logos', presentation: 'donut' },
     { version: 1, chartId: 'not_a_chart', presentation: 'donut' },
     { version: 1, chartId: 'arr_mix', presentation: 'donut', data: { values: ['secret'] } },
     { version: 1, chartId: 'arr_mix', presentation: 'donut', query: 'select secret' },

@@ -15,6 +15,7 @@ import type { ReportChartContract, ReportChartId } from './lib/reportChartContra
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
 import { toggleArrMixChannel } from './lib/arrMixPresentation';
 import { toggleTopAccount } from './lib/topAccountsPresentation';
+import { toggleNetNewLogosRegion } from './lib/netNewLogosPresentation';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
 import { registerSemanticWebMcpTools } from './lib/registerSemanticWebMcpTools';
 import { getBusinessDefinitions, queryBusinessMetric } from './lib/semanticLayerClient';
@@ -218,7 +219,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   }, [applyFilterPatch]);
 
   const handleToggleRegion = useCallback((region: Region) => {
-    const next = dashboardRef.current.filters.region === region ? 'all' : region;
+    const next = toggleNetNewLogosRegion(dashboardRef.current.filters.region, region);
     void applyFilterPatch({ region: next }).catch(() => {});
   }, [applyFilterPatch]);
 
@@ -367,7 +368,13 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
             <div className="card">
               <p className="panel-title">Net new logos</p>
               <p className="panel-sub">By region, last 6 months — click a region to filter</p>
-              <NewLogosHeatmap months={last6Labels} byRegion={heatmap} activeRegion={filters.region} onToggle={handleToggleRegion} />
+              <NewLogosHeatmap
+                months={last6Labels}
+                byRegion={heatmap}
+                activeRegion={filters.region}
+                onToggle={handleToggleRegion}
+                presentation={chartContracts.net_new_logos.presentation}
+              />
             </div>
           </div>
         </div>
