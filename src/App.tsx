@@ -13,6 +13,7 @@ import {
 } from './lib/chartState';
 import type { ReportChartContract, ReportChartId } from './lib/reportChartContract';
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
+import { toggleArrMixChannel } from './lib/arrMixPresentation';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
 import { registerSemanticWebMcpTools } from './lib/registerSemanticWebMcpTools';
 import { getBusinessDefinitions, queryBusinessMetric } from './lib/semanticLayerClient';
@@ -53,7 +54,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   const undoStackRef = useRef(undoStack);
   undoStackRef.current = undoStack;
 
-  const { charts: chartState, filters } = dashboard;
+  const { charts: chartState, filters, chartContracts } = dashboard;
 
   // Subscribe before fetching. A newer Realtime event must not be overwritten
   // by the initial fetch that was already in flight.
@@ -211,7 +212,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   }, [applyFilterPatch]);
 
   const handleToggleChannel = useCallback((channel: AcquisitionChannel) => {
-    const next = dashboardRef.current.filters.channel === channel ? 'all' : channel;
+    const next = toggleArrMixChannel(dashboardRef.current.filters.channel, channel);
     void applyFilterPatch({ channel: next }).catch(() => {});
   }, [applyFilterPatch]);
 
@@ -253,11 +254,11 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
 
   const mix = arrMixByChannel(filteredData, latest);
   const mixTotal = mix.Paid + mix.Organic + mix.Referral + mix.Partner || 1; // a narrow filter combo can genuinely zero this out
-  const mixChannels: { label: string; channel: AcquisitionChannel; pct: number; color: string }[] = [
-    { label: 'Paid', channel: 'Paid', pct: (mix.Paid / mixTotal) * 100, color: PALETTE.cat1 },
-    { label: 'Organic', channel: 'Organic', pct: (mix.Organic / mixTotal) * 100, color: PALETTE.cat2 },
-    { label: 'Referral', channel: 'Referral', pct: (mix.Referral / mixTotal) * 100, color: PALETTE.cat3 },
-    { label: 'Partner', channel: 'Partner', pct: (mix.Partner / mixTotal) * 100, color: PALETTE.cat4 },
+  const mixChannels: { label: string; channel: AcquisitionChannel; arr: number; pct: number; color: string }[] = [
+    { label: 'Paid', channel: 'Paid', arr: mix.Paid, pct: (mix.Paid / mixTotal) * 100, color: PALETTE.cat1 },
+    { label: 'Organic', channel: 'Organic', arr: mix.Organic, pct: (mix.Organic / mixTotal) * 100, color: PALETTE.cat2 },
+    { label: 'Referral', channel: 'Referral', arr: mix.Referral, pct: (mix.Referral / mixTotal) * 100, color: PALETTE.cat3 },
+    { label: 'Partner', channel: 'Partner', arr: mix.Partner, pct: (mix.Partner / mixTotal) * 100, color: PALETTE.cat4 },
   ];
 
   const accounts = topAccounts(accountPickerData, latest, 5);
@@ -343,7 +344,12 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
             <div className="card">
               <p className="panel-title">ARR mix</p>
               <p className="panel-sub">By acquisition channel — click a channel to filter</p>
-              <ArrMixDonut channels={mixChannels} activeChannel={filters.channel} onToggle={handleToggleChannel} />
+              <ArrMixDonut
+                channels={mixChannels}
+                activeChannel={filters.channel}
+                onToggle={handleToggleChannel}
+                presentation={chartContracts.arr_mix.presentation}
+              />
             </div>
 
             <div className="card">

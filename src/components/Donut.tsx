@@ -30,9 +30,11 @@ export function Donut({ segments, activeId, onToggle }: Props) {
             type="button"
             key={s.id}
             className={`item ${onToggle ? 'filterable' : ''} ${activeId === s.id ? 'active' : ''}`}
+            aria-pressed={activeId === s.id}
             onClick={() => onToggle?.(s.id)}
             disabled={!onToggle}
           >
+            <span className="selection-mark" aria-hidden="true">{activeId === s.id ? '✓' : ''}</span>
             <span className="sw" style={{ background: s.color }} />
             {s.label}
             <b>{s.pct.toFixed(0)}%</b>
