@@ -14,6 +14,7 @@ import {
 import type { ReportChartContract, ReportChartId } from './lib/reportChartContract';
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
 import { toggleArrMixChannel } from './lib/arrMixPresentation';
+import { toggleTopAccount } from './lib/topAccountsPresentation';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
 import { registerSemanticWebMcpTools } from './lib/registerSemanticWebMcpTools';
 import { getBusinessDefinitions, queryBusinessMetric } from './lib/semanticLayerClient';
@@ -222,7 +223,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   }, [applyFilterPatch]);
 
   const handleToggleAccount = useCallback((name: string) => {
-    const next = dashboardRef.current.filters.accountName === name ? 'all' : name;
+    const next = toggleTopAccount(dashboardRef.current.filters.accountName, name);
     void applyFilterPatch({ accountName: next }).catch(() => {});
   }, [applyFilterPatch]);
 
@@ -355,7 +356,12 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
             <div className="card">
               <p className="panel-title">Top accounts</p>
               <p className="panel-sub">By current ARR — click an account to filter</p>
-              <TopAccounts accounts={accounts} activeAccount={filters.accountName} onToggle={handleToggleAccount} />
+              <TopAccounts
+                accounts={accounts}
+                activeAccount={filters.accountName}
+                onToggle={handleToggleAccount}
+                presentation={chartContracts.top_accounts.presentation}
+              />
             </div>
 
             <div className="card">

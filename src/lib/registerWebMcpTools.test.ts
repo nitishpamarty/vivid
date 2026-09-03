@@ -55,6 +55,9 @@ test('registers discovery/read/write tools and cleans every registration', async
     const write = await tools[3].execute({ chartId: 'arr_mix', contract: { version: 1, chartId: 'arr_mix', presentation: 'bar' } }) as { ok: true };
     assert.equal(write.ok, true);
     assert.equal(local.getContractCalls(), 1);
+    const topAccountsWrite = await tools[3].execute({ chartId: 'top_accounts', contract: { version: 1, chartId: 'top_accounts', presentation: 'bar' } }) as { ok: true };
+    assert.equal(topAccountsWrite.ok, true);
+    assert.equal(local.getContractCalls(), 2);
     cleanup();
     assert.deepEqual(unregistered, tools.map(({ name }) => name));
   } finally { remove(); }
