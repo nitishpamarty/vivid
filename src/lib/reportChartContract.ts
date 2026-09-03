@@ -130,17 +130,17 @@ export function validateReportChartContract(input: unknown): ReportChartValidati
 
 export function validateReportChartContracts(input: unknown): ReportChartValidationResult<ReportChartContracts> {
   const value = objectInput(input);
-  if (!value) return invalid('chartContracts must be an object keyed by every Revenue chart id.');
+  if (!value) return invalid('chartContracts must be an object keyed by every Revenue chart id.') as ReportChartValidationResult<ReportChartContracts>;
   const unknownIds = Object.keys(value).filter((id) => !REPORT_CHART_IDS.includes(id as ReportChartId));
   const missingIds = REPORT_CHART_IDS.filter((id) => !Object.prototype.hasOwnProperty.call(value, id));
-  if (unknownIds.length > 0) return invalid(`Unknown chart contract id(s): ${unknownIds.join(', ')}.`, 'unknown_chart');
-  if (missingIds.length > 0) return invalid(`Missing chart contract id(s): ${missingIds.join(', ')}.`, 'invalid_contract');
+  if (unknownIds.length > 0) return invalid(`Unknown chart contract id(s): ${unknownIds.join(', ')}.`, 'unknown_chart') as ReportChartValidationResult<ReportChartContracts>;
+  if (missingIds.length > 0) return invalid(`Missing chart contract id(s): ${missingIds.join(', ')}.`, 'invalid_contract') as ReportChartValidationResult<ReportChartContracts>;
   const contracts = {} as ReportChartContracts;
   for (const id of REPORT_CHART_IDS) {
     const result = validateReportChartContract(value[id]);
     if (!result.ok) return result as ReportChartValidationResult<ReportChartContracts>;
     if (result.data.chartId !== id) return invalid(`chartContracts.${id}.chartId must be "${id}".`, 'unknown_chart') as ReportChartValidationResult<ReportChartContracts>;
-    contracts[id] = result.data as ReportChartContracts[typeof id];
+    Object.assign(contracts, { [id]: result.data });
   }
   return { ok: true, data: contracts };
 }

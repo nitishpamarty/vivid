@@ -24,7 +24,9 @@ test('Top Accounts presentation edits use the same undo frame', () => {
   const frames = addUndoFrame([], DEFAULT_DASHBOARD_STATE, 9, {
     kind: 'chart_contract', chartId: 'top_accounts', contract: { version: 1, chartId: 'top_accounts', presentation: 'bar' }, actor: 'agent',
   });
-  assert.equal(frames.at(-1)?.mutation.chartId, 'top_accounts');
+  const mutation = frames.at(-1)?.mutation;
+  assert.equal(mutation?.kind, 'chart_contract');
+  if (mutation?.kind === 'chart_contract') assert.equal(mutation.chartId, 'top_accounts');
   assert.equal(popUndoFrame(frames).length, 0);
 });
 

@@ -50,14 +50,18 @@ test('registers discovery/read/write tools and cleans every registration', async
     ]);
     const options = await tools[1].execute({}) as { ok: true; data: unknown[] };
     assert.equal(options.data.length, 6);
-    const read = await tools[2].execute({ chartId: 'arr_mix' }) as { ok: true; data: unknown };
-    assert.deepEqual(read.data, DEFAULT_REPORT_CHART_CONTRACTS.arr_mix);
-    const write = await tools[3].execute({ chartId: 'arr_mix', contract: { version: 1, chartId: 'arr_mix', presentation: 'bar' } }) as { ok: true };
-    assert.equal(write.ok, true);
-    assert.equal(local.getContractCalls(), 1);
-    const topAccountsWrite = await tools[3].execute({ chartId: 'top_accounts', contract: { version: 1, chartId: 'top_accounts', presentation: 'bar' } }) as { ok: true };
-    assert.equal(topAccountsWrite.ok, true);
-    assert.equal(local.getContractCalls(), 2);
+    for (const chartId of ['arr_mix', 'top_accounts', 'net_new_logos', 'arr_bridge', 'retention_nrr', 'retention_churn'] as const) {
+      const read = await tools[2].execute({ chartId }) as { ok: true; data: unknown };
+      assert.deepEqual(read.data, DEFAULT_REPORT_CHART_CONTRACTS[chartId]);
+    }
+    for (const [chartId, presentation] of [
+      ['arr_mix', 'bar'], ['top_accounts', 'bar'], ['net_new_logos', 'bar'],
+      ['arr_bridge', 'waterfall'], ['retention_nrr', 'line'], ['retention_churn', 'line'],
+    ] as const) {
+      const write = await tools[3].execute({ chartId, contract: { version: 1, chartId, presentation } }) as { ok: true };
+      assert.equal(write.ok, true);
+    }
+    assert.equal(local.getContractCalls(), 6);
     cleanup();
     assert.deepEqual(unregistered, tools.map(({ name }) => name));
   } finally { remove(); }
@@ -77,6 +81,14 @@ test('validates before transport and leaves the prior contract unchanged', async
     assert.deepEqual(local.getContracts(), before);
     const mismatch = await tools[3].execute({ chartId: 'arr_mix', contract: { version: 1, chartId: 'top_accounts', presentation: 'bar' } }) as { ok: false; reason: string };
     assert.equal(mismatch.ok, false);
+    assert.equal(local.getContractCalls(), 0);
+    for (const [chartId, presentation] of [
+      ['arr_bridge', 'bar'], ['retention_nrr', 'donut'], ['retention_churn', 'heatmap'],
+    ] as const) {
+      const rejected = await tools[3].execute({ chartId, contract: { version: 1, chartId, presentation } }) as { ok: false; reason: string };
+      assert.equal(rejected.ok, false);
+      assert.equal(rejected.reason, 'invalid_value');
+    }
     assert.equal(local.getContractCalls(), 0);
   } finally { remove(); }
 });

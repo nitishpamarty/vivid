@@ -51,7 +51,9 @@ function tool(name: string, description: string, inputSchema: Record<string, unk
 }
 
 export function registerNorthbeamTools(bridge: ToolBridge): () => void {
-  if (typeof document === 'undefined' || !document.modelContext) return () => {};
+  type ModelContextLike = { registerTool: (tool: unknown) => unknown };
+  const browserDocument = (globalThis as unknown as { document?: { modelContext?: ModelContextLike } }).document;
+  if (!browserDocument?.modelContext) return () => {};
 
   const tools = [
     tool(
@@ -167,6 +169,6 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
     ),
   ];
 
-  const unregisterFns = tools.map((t) => document.modelContext!.registerTool(t));
+  const unregisterFns = tools.map((t) => browserDocument.modelContext!.registerTool(t));
   return () => callUnregisterFns(unregisterFns);
 }

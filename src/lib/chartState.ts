@@ -7,7 +7,7 @@ import { supabase } from './supabase.ts';
 import type { Region, Segment } from './types.ts';
 import {
   DASHBOARD_SCHEMA_VERSION, DEFAULT_DASHBOARD_STATE, decodeDashboardState,
-  type DashboardState, type DashboardStateDecodeResult,
+  type DashboardState,
 } from './dashboardState.ts';
 export {
   DEFAULT_REPORT_CHART_CONTRACTS, REPORT_CHART_IDS, validateReportChartContract, validateReportChartContracts,

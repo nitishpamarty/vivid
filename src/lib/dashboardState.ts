@@ -36,12 +36,12 @@ export function decodeDashboardState(value: unknown, schemaVersion: number): Das
     return { ok: false, reason: 'unknown_field', error: 'Shared dashboard state contains an unknown field.' };
   }
   if (schemaVersion === 4) {
-    return { ok: true, data: { charts: value.charts as ChartState, filters: value.filters as ReportFilters, chartContracts: DEFAULT_REPORT_CHART_CONTRACTS } };
+    return { ok: true, data: { charts: value.charts as unknown as ChartState, filters: value.filters as unknown as ReportFilters, chartContracts: DEFAULT_REPORT_CHART_CONTRACTS } };
   }
   if (schemaVersion !== DASHBOARD_SCHEMA_VERSION) {
     return { ok: false, reason: 'invalid_state', error: 'Shared dashboard state version is unavailable.' };
   }
   const contracts = validateReportChartContracts(value.chartContracts);
   if (!contracts.ok) return { ok: false, reason: contracts.reason, error: contracts.error };
-  return { ok: true, data: { charts: value.charts as ChartState, filters: value.filters as ReportFilters, chartContracts: contracts.data } };
+  return { ok: true, data: { charts: value.charts as unknown as ChartState, filters: value.filters as unknown as ReportFilters, chartContracts: contracts.data } };
 }
