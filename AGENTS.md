@@ -1,8 +1,7 @@
 # AGENTS.md
 
-This is the source of truth for architecture and scope in this repo,
-superseding [HANDOFF.md](HANDOFF.md) (kept for historical pivot rationale
-only). Read this before touching anything here.
+This is the source of truth for architecture and scope in this repo. Read
+this before touching anything here.
 
 ## Purpose
 
@@ -54,6 +53,19 @@ more than one.
   - `find_field_values` (read-only) — resolves a phrase to a canonical
     field value (a chart knob or a filter); always returns its best
     guess, no ambiguity/clarification round-trip with the user.
+  - `list_report_chart_options` / `get_report_chart_contract` /
+    `set_report_chart_contract` (built, verified live in production) —
+    a second, separate mutation path that extends WebMCP editability to
+    `arr_mix`, `top_accounts`, and `net_new_logos` without giving the agent
+    raw Vega access to them. Each accepts only a small allow-listed
+    `presentation` per chart id (e.g. `arr_mix`: `donut` | `bar`), built
+    from the same filtered data the app already computes for that panel.
+    `arr_bridge`/`retention_nrr`/`retention_churn` are also addressable
+    through this contract but only with their one fixed presentation —
+    anything else is rejected, which is what keeps the "never dual-axis"/
+    "always a waterfall" invariants above true at the validation layer.
+    Lives in the same `DashboardState`/version/undo/activity-log pipeline
+    as everything else — no second state store.
   - Every tool call returns `{ ok: true, data }` or
     `{ ok: false, reason, error }` — a machine-readable reason code plus a
     human-readable message.
@@ -273,8 +285,8 @@ Mid-Market / 15–25% SMB by $ at month 36 — a Enterprise-led mix story is
 still the shape, just not a pinned percentage.
 
 The `superstore-*.csv` files that used to sit at repo root (pre-pivot
-InkPlot leftovers, see HANDOFF.md) have been removed — confirmed with the
-user first, since they predated this session.
+InkPlot leftovers from this project's predecessor) have been removed —
+confirmed with the user first, since they predated this session.
 
 <details>
 <summary>Superseded: the original exact-anchor spec (kept for history, not current)</summary>
@@ -437,7 +449,11 @@ removed; its generated employees dataset remains for Connect Data.
     as Revenue — agent-triggered undo remains out of scope for both
     surfaces, unchanged.
 
-**Built (Connect Data, on explicit direction):** a 3rd tab, separate from
+**Built (Connect Data, on explicit direction), tab currently hidden from
+nav:** unwired from `Topbar.tsx`/`App.tsx` before a demo session (too many
+open issues to show live) — `ExploreDashboard` and its supporting lib files
+are untouched, just unreferenced from routing, so re-wiring is a small diff
+whenever it's ready to show again. Originally a 3rd tab, separate from
 the two report surfaces above — pick a real Postgres table, override a column's
 display type, and an agent co-authors the resulting chart via a validated
 contract (`set_chart_contract`), not a raw spec. See the Connect Data bullet
@@ -455,13 +471,25 @@ deliberately **not** the deferred "report-abstraction layer" below: no
 questions, it does not feed either report surface's charts or Connect
 Data's chart contract.
 
+**Built (Governed revenue chart presentations):** `set_report_chart_contract`
+extends WebMCP editability to `arr_mix`, `top_accounts`, and `net_new_logos`
+via a small allow-listed presentation per chart id (not raw Vega) — see the
+WebMCP tool contract bullet above. Verified live in production. This
+supersedes the old "four hand-rolled
+panels stay non-patchable forever" framing below for those three charts
+specifically — the KPI cards remain the one Revenue panel with no WebMCP
+mutation path at all.
+
 **Explicitly deferred, do not build without a new decision:**
-- letting the WebMCP tool surface treat any of the four hand-rolled Revenue
-  panels as a patchable chart spec — `arr_bridge`/`retention_nrr`/`retention_churn`
-  remain the only `update_chart_spec` chart ids. `set_report_filters`
+- `update_chart_spec` (the original, raw-knob mutation path) still only
+  covers `arr_bridge`/`retention_nrr`/`retention_churn` — it was not
+  extended to the three newly-governed panels, which go through
+  `set_report_chart_contract` instead. `set_report_filters`
   cross-filters all six Revenue panels' underlying data, which is a different
-  thing from turning the four hand-rolled ones into agent-editable Vega
-  specs — that line hasn't moved.
+  thing from either mutation path above.
+- giving the agent raw Vega-Lite access to any Revenue panel, including the
+  three now-governed ones — `set_report_chart_contract` only ever accepts an
+  allow-listed `presentation` value, never a spec.
 - a general-purpose report-abstraction layer (registry/plugin system) for
   Revenue/Product Usage — two hand-coded report surfaces are still the
   current shape. Connect Data above

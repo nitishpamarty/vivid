@@ -47,6 +47,24 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   const [sharedStatus, setSharedStatus] = useState<SharedStatus>('connecting');
   const [undoStack, setUndoStack] = useState<UndoFrame<DashboardState>[]>([]);
   const [undoNotice, setUndoNotice] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
+  const handleShare = useCallback(() => {
+    const url = window.location.href;
+    const copy = navigator.clipboard?.writeText(url) ?? Promise.reject();
+    copy.catch(() => {
+      const el = document.createElement('textarea');
+      el.value = url;
+      el.style.position = 'fixed';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }).finally(() => {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    });
+  }, []);
   const [log, setLog] = useState<LogEntry[]>([]);
   const dashboardRef = useRef(dashboard);
   dashboardRef.current = dashboard;
@@ -298,7 +316,10 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     <div className="northbeam" data-report={report}>
       <div className="shell">
         <Topbar report={report} onChangeReport={onChangeReport} />
-        <div className="shared-status" aria-label="Shared session status">Live shared session · v{version}</div>
+        <div className="shared-status-row">
+          <div className="shared-status" aria-label="Shared session status">Live shared session · v{version}</div>
+          <button type="button" className="share-btn" onClick={handleShare}>{shareCopied ? 'Copied!' : 'Share'}</button>
+        </div>
         <div className="toolbar-row">
           <div className="filters-wrap">
             <Filters filters={filters} onChange={handleFilterChange} />
@@ -380,7 +401,6 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
 
         <ActivityLog entries={log} />
 
-        <footer className="note">Illustrative data for a fictional company — for direction review only.</footer>
       </div>
     </div>
   );
@@ -411,7 +431,7 @@ export default function App() {
             window.history.replaceState(null, '', buildRoomUrl(window.location.href, next));
             setSession(next);
           }}>Start live session</button>
-          <p className="landing-note">No login. Anyone with the link can edit this fictional dashboard.</p>
+          <p className="landing-note">No login. Anyone with the link can edit this dashboard.</p>
         </div>
       </div>
     );

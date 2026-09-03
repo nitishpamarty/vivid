@@ -1,8 +1,8 @@
 export type ReportId = 'revenue' | 'usage' | 'explore';
 
 const REPORTS: { id: ReportId; label: string; sub: string }[] = [
-  { id: 'revenue', label: 'Revenue', sub: 'Revenue overview · fictional demo data' },
-  { id: 'usage', label: 'Product Usage', sub: 'Activity OS · fictional demo data' },
+  { id: 'revenue', label: 'Revenue', sub: 'Revenue overview' },
+  { id: 'usage', label: 'Product Usage', sub: 'Activity OS' },
 ];
 
 interface Props {

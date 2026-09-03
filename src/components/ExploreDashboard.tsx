@@ -360,8 +360,6 @@ export function ExploreDashboard({ report, onChangeReport, session }: { report: 
 
         <ActivityLog entries={log} />
         </div>
-
-        <footer className="note">Illustrative data for a fictional company — for direction review only.</footer>
       </div>
     </div>
   );

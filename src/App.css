@@ -332,7 +332,14 @@ footer.note { margin-top: 22px; font-size: 11.5px; color: var(--ink-muted); text
 .loading, .error { padding: 64px; text-align: center; color: var(--ink-muted); font-size: 13px; }
 .shared-status-card { max-width: 520px; margin: 90px auto 0; text-align: center; }
 .shared-status-card .panel-title { margin-bottom: 8px; }
-.shared-status { color: var(--ink-muted); font-size: 11px; margin: -12px 0 14px; }
+.shared-status { color: var(--ink-muted); font-size: 11px; }
+.shared-status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -12px 0 14px; }
+.share-btn {
+  font: 500 11.5px "IBM Plex Sans", sans-serif; color: var(--ink-secondary);
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 12px; cursor: pointer; flex: none;
+}
+.share-btn:hover { color: var(--ink-primary); border-color: var(--baseline); }
 
 .session-landing { min-height: 100%; display: grid; place-items: center; padding: 24px; }
 .landing-card { width: min(440px, 100%); padding: 28px; }

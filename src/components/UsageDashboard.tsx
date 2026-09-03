@@ -308,7 +308,5 @@ export function UsageDashboard({ data, report, onChangeReport, session }: Props)
     </aside></div>
 
     <ActivityLog entries={log} />
-
-    <footer className="note">Illustrative data for a fictional company — for direction review only.</footer>
   </div></div>;
 }
