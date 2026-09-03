@@ -1,9 +1,11 @@
+import { CHART_IDS, CHART_OPTIONS, validatePatch, type ChartId, type ChartState } from './chartValidation.ts';
+import { CHART_METRIC_KEYS, findFieldValue, REPORT_ID } from './reportToolSupport.ts';
+import { FILTER_OPTIONS, validateFilterPatch, type ReportFilters } from './reportFilters.ts';
 import {
-  CHART_IDS, CHART_METRIC_KEYS, CHART_OPTIONS, REPORT_ID, findFieldValue, validatePatch,
-  type ChartId, type ChartState,
-} from './chartState';
-import { FILTER_OPTIONS, validateFilterPatch, type ReportFilters } from './reportFilters';
-import { callUnregisterFns } from './webmcpCleanup';
+  REPORT_CHART_IDS, reportChartOptions, validateReportChartContract,
+  type ReportChartContract, type ReportChartContracts, type ReportChartId,
+} from './reportChartContract.ts';
+import { callUnregisterFns } from './webmcpCleanup.ts';
 
 // metricKey is the Cube member ("<cube>.<field>") this chart's headline
 // number corresponds to — pass it straight through to get_business_definitions
@@ -26,6 +28,8 @@ export interface ToolBridge {
   getTopAccounts: () => { name: string; arr: number }[];
   getAccountMatches: (query: string) => { name: string; arr: number }[];
   getValidAccountNames: () => readonly string[];
+  getChartContracts: () => ReportChartContracts;
+  applyChartContract: (chartId: ReportChartId, contract: ReportChartContract) => Promise<ReportChartContract>;
 }
 
 function tool(name: string, description: string, inputSchema: Record<string, unknown>, run: (input: Record<string, unknown>) => unknown) {
@@ -59,8 +63,45 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
         data: {
           reportId: REPORT_ID, charts: bridge.getChartState(), fields: REPORT_FIELDS,
           filters: bridge.getFilters(), topAccounts: bridge.getTopAccounts(),
+          chartContracts: bridge.getChartContracts(),
         },
       }),
+    ),
+    tool(
+      'list_report_chart_options',
+      'List the six Revenue chart contracts, their approved presentations, renderer ids, defaults, and fixed invariants. These are intent-only options; raw fields, data, queries, and Vega specifications are not accepted.',
+      { type: 'object', properties: {} },
+      () => ({ ok: true, data: reportChartOptions() }),
+    ),
+    tool(
+      'get_report_chart_contract',
+      'Get the canonical presentation contract for one Revenue chart.',
+      { type: 'object', properties: { chartId: { type: 'string', enum: REPORT_CHART_IDS } }, required: ['chartId'] },
+      (input) => {
+        const chartId = input.chartId as ReportChartId;
+        if (!REPORT_CHART_IDS.includes(chartId)) {
+          return { ok: false, reason: 'unknown_chart', error: `"${String(input.chartId ?? '')}" is not a Revenue chart. Valid ids: ${REPORT_CHART_IDS.join(', ')}.` };
+        }
+        return { ok: true, data: bridge.getChartContracts()[chartId] };
+      },
+    ),
+    tool(
+      'set_report_chart_contract',
+      'Set one approved Revenue chart presentation atomically. Accepts only { chartId, contract: { version: 1, chartId, presentation } }; raw specs, data, URLs, transforms, config, fields, queries, and aggregations are rejected.',
+      { type: 'object', properties: { chartId: { type: 'string', enum: REPORT_CHART_IDS }, contract: { type: 'object' } }, required: ['chartId', 'contract'] },
+      async (input) => {
+        const chartId = input.chartId as ReportChartId;
+        if (!REPORT_CHART_IDS.includes(chartId)) {
+          return { ok: false, reason: 'unknown_chart', error: `"${String(input.chartId ?? '')}" is not a Revenue chart. Valid ids: ${REPORT_CHART_IDS.join(', ')}.` };
+        }
+        const validation = validateReportChartContract(input.contract);
+        if (!validation.ok) return { ok: false, reason: validation.reason, error: validation.error };
+        if (validation.data.chartId !== chartId) {
+          return { ok: false, reason: 'invalid_contract', error: `contract.chartId must be "${chartId}".` };
+        }
+        const data = await bridge.applyChartContract(chartId, validation.data);
+        return { ok: true, data };
+      },
     ),
     tool(
       'list_report_options',

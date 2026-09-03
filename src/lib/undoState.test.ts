@@ -13,6 +13,13 @@ test('a successful undo uses the edit version and pops one frame', () => {
   assert.equal(popUndoFrame(frames).length, 0);
 });
 
+test('contract edits are undoable shared mutations', () => {
+  const frames = addUndoFrame([], DEFAULT_DASHBOARD_STATE, 8, {
+    kind: 'chart_contract', chartId: 'arr_mix', contract: { version: 1, chartId: 'arr_mix', presentation: 'bar' }, actor: 'agent',
+  });
+  assert.equal(frames.at(-1)?.mutation.kind, 'chart_contract');
+});
+
 test('a remote version invalidates local undo history without changing state', () => {
   const frames = addUndoFrame([], DEFAULT_DASHBOARD_STATE, 7, { kind: 'filter_patch', patch: { segment: 'Enterprise' }, actor: 'person' });
   assert.deepEqual(invalidateUndoFrames(frames, 8), []);

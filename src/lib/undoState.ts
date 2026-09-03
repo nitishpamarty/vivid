@@ -1,6 +1,6 @@
 import type { SharedMutation } from './sharedStateProtocol.ts';
 
-export type UndoableMutation = Extract<SharedMutation, { kind: 'chart_patch' | 'filter_patch' }>;
+export type UndoableMutation = Extract<SharedMutation, { kind: 'chart_patch' | 'chart_contract' | 'filter_patch' }>;
 
 export interface UndoFrame<TState> {
   state: TState;

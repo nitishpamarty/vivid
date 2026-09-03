@@ -8,9 +8,10 @@ import {
 } from './lib/metrics';
 import { PALETTE, BRAND } from './lib/palette';
 import {
-  type ChartId, type DashboardState, DEFAULT_DASHBOARD_STATE,
-  loadDashboardSnapshot, subscribeDashboardState, swatchHex,
+  decodeDashboardState, type ChartId, type DashboardState, DEFAULT_DASHBOARD_STATE,
+  DASHBOARD_SCHEMA_VERSION, loadDashboardSnapshot, subscribeDashboardState, swatchHex,
 } from './lib/chartState';
+import type { ReportChartContract, ReportChartId } from './lib/reportChartContract';
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
 import { registerSemanticWebMcpTools } from './lib/registerSemanticWebMcpTools';
@@ -95,7 +96,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     const unsubLog = subscribeActivityLog((entry) => {
       setLog((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry].slice(-50)));
     }, 'northbeam', session.roomId);
-    void createSharedRoom<DashboardState>(session, DEFAULT_DASHBOARD_STATE, 4)
+    void createSharedRoom<DashboardState>(session, DEFAULT_DASHBOARD_STATE, DASHBOARD_SCHEMA_VERSION)
       .then((result) => {
         if (!active || !result.ok) throw new Error('unavailable');
         return loadDashboardSnapshot('northbeam', session.roomId);
@@ -121,17 +122,22 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
       error.name = result.reason;
       throw error;
     }
+    const rawState = result.data.state as unknown;
+    const hasContracts = typeof rawState === 'object' && rawState !== null && !Array.isArray(rawState) && 'chartContracts' in rawState;
+    const decoded = decodeDashboardState(rawState, hasContracts ? DASHBOARD_SCHEMA_VERSION : 4);
+    if (!decoded.ok) throw new Error('Shared dashboard state is unavailable.');
+    const data = { ...result.data, state: decoded.data };
     if (recordUndo && mutation.kind !== 'undo') {
-      undoStackRef.current = addUndoFrame(undoStackRef.current, current, result.data.version, mutation);
+      undoStackRef.current = addUndoFrame(undoStackRef.current, current, data.version, mutation);
     }
-    dashboardRef.current = result.data.state;
-    versionRef.current = result.data.version;
-    setVersion(result.data.version);
+    dashboardRef.current = data.state;
+    versionRef.current = data.version;
+    setVersion(data.version);
     setUndoStack(undoStackRef.current);
     setUndoNotice('');
-    setDashboard(result.data.state);
-    setLog((prev) => prev.some((entry) => entry.id === result.data.activity.id) ? prev : [...prev, result.data.activity].slice(-50));
-    return result.data;
+    setDashboard(data.state);
+    setLog((prev) => prev.some((entry) => entry.id === data.activity.id) ? prev : [...prev, data.activity].slice(-50));
+    return data;
   }, [session, sharedStatus]);
 
   const applyChartPatch = useCallback(async (chartId: ChartId, patch: Record<string, unknown>, actor: 'person' | 'agent' = 'person') => {
@@ -144,6 +150,11 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     return result.state.filters;
   }, [applySharedMutation]);
 
+  const applyChartContract = useCallback(async (chartId: ReportChartId, contract: ReportChartContract, actor: 'person' | 'agent' = 'person') => {
+    const result = await applySharedMutation({ kind: 'chart_contract', chartId, contract, actor });
+    return result.state.chartContracts[chartId];
+  }, [applySharedMutation]);
+
   useEffect(() => {
     if (sharedStatus !== 'ready') return;
     const bridge = {
@@ -151,6 +162,8 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
       applyChartPatch: (chartId: ChartId, patch: Record<string, unknown>) => applyChartPatch(chartId, patch, 'agent'),
       getFilters: () => dashboardRef.current.filters,
       applyFilterPatch: (patch: Record<string, unknown>) => applyFilterPatch(patch, 'agent'),
+      getChartContracts: () => dashboardRef.current.chartContracts,
+      applyChartContract: (chartId: ReportChartId, contract: ReportChartContract) => applyChartContract(chartId, contract, 'agent'),
       getTopAccounts: () => accountsRef.current,
       getAccountMatches: (query: string) => accountDirectoryRef.current
         .filter((account) => account.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
@@ -167,7 +180,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     // be driven from devtools in a browser that doesn't have that extension.
     (window as unknown as { __vividRegisterTools?: () => () => void }).__vividRegisterTools = registerAll;
     return registerAll();
-  }, [applyChartPatch, applyFilterPatch, sharedStatus]);
+  }, [applyChartContract, applyChartPatch, applyFilterPatch, sharedStatus]);
 
   const handleUndo = useCallback(() => {
     const stack = undoStackRef.current;

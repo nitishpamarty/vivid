@@ -3,15 +3,23 @@
 // (see vegaSpecs.ts) — this is the "chart-as-data not chart-as-code" state
 // that persistence, undo, and the WebMCP tools all operate on.
 
-import { DEFAULT_FILTERS, type ReportFilters } from './reportFilters.ts';
 import { supabase } from './supabase.ts';
 import type { Region, Segment } from './types.ts';
+import {
+  DASHBOARD_SCHEMA_VERSION, DEFAULT_DASHBOARD_STATE, decodeDashboardState,
+  type DashboardState, type DashboardStateDecodeResult,
+} from './dashboardState.ts';
+export {
+  DEFAULT_REPORT_CHART_CONTRACTS, REPORT_CHART_IDS, validateReportChartContract, validateReportChartContracts,
+  type ReportChartContract, type ReportChartContracts, type ReportChartId,
+} from './reportChartContract.ts';
+export { DASHBOARD_SCHEMA_VERSION, DEFAULT_DASHBOARD_STATE, decodeDashboardState, type DashboardState, type DashboardStateDecodeResult } from './dashboardState.ts';
 export {
   CHART_IDS, CHART_OPTIONS, DEFAULT_CHART_STATE, SWATCH_KEYS, WINDOW_OPTIONS, swatchHex, validatePatch,
   type ArrBridgeKnobs, type ChartId, type ChartState, type PatchResult, type RetentionLineKnobs, type SwatchKey,
   type WindowMonths,
 } from './chartValidation.ts';
-import { DEFAULT_CHART_STATE, WINDOW_OPTIONS, type ChartId, type ChartState, type SwatchKey, type WindowMonths } from './chartValidation.ts';
+import { WINDOW_OPTIONS, type ChartId, type SwatchKey, type WindowMonths } from './chartValidation.ts';
 
 // Static chart id -> Cube member name ("<cube>.<field>", matching
 // semanticMetadata.ts's memberName()) so WebMCP tools can hand the agent a
@@ -26,20 +34,9 @@ export const CHART_METRIC_KEYS: Record<ChartId, string> = {
   retention_churn: 'mrr_monthly.churned_customers',
 };
 
-// ---- whole-dashboard state: the two chart panels' knobs + the report-wide filters ----
-// One persisted/undo unit, since both are "edits to the dashboard" a viewer
-// or the agent can make.
-
-export interface DashboardState {
-  charts: ChartState;
-  filters: ReportFilters;
-}
-
-export const DEFAULT_DASHBOARD_STATE: DashboardState = { charts: DEFAULT_CHART_STATE, filters: DEFAULT_FILTERS };
-
 // ---- Supabase reads: room-scoped, versioned, realtime-synced across viewers ----
 
-const SCHEMA_VERSION = 4; // v2 added `filters`; v3 added `filters.accountName`; v4 added `filters.channel`/`filters.contractType` — older rows are rejected below, not migrated
+const SCHEMA_VERSION = DASHBOARD_SCHEMA_VERSION;
 const REPORT_ID = 'northbeam';
 
 export interface DashboardSnapshot {
@@ -56,10 +53,12 @@ export async function loadDashboardSnapshot(reportId: string = REPORT_ID, roomId
     .eq('room_id', roomId)
     .maybeSingle();
   if (error) throw new Error('Shared dashboard is unavailable.');
-  if (!data || data.schema_version !== SCHEMA_VERSION || typeof data.version !== 'number') {
+  if (!data || ![4, SCHEMA_VERSION].includes(data.schema_version) || typeof data.version !== 'number') {
     throw new Error('Shared dashboard state is unavailable.');
   }
-  return { state: data.state as DashboardState, version: data.version };
+  const decoded = decodeDashboardState(data.state, data.schema_version);
+  if (!decoded.ok) throw new Error('Shared dashboard state is unavailable.');
+  return { state: decoded.data, version: data.version };
 }
 
 export async function loadDashboardState(reportId: string = REPORT_ID, roomId?: string): Promise<DashboardState> {
@@ -79,7 +78,8 @@ export function subscribeDashboardState(onChange: (state: DashboardState, versio
         // (Phase: Product Usage shared persistence) — ignore updates for any
         // report id other than this subscription's own.
         if (payload.new.report_id !== reportId) return;
-        onChange(payload.new.state as DashboardState, Number(payload.new.version));
+        const decoded = decodeDashboardState(payload.new.state, Number(payload.new.schema_version));
+        if (decoded.ok) onChange(decoded.data, Number(payload.new.version));
       },
     )
     .subscribe((status) => {

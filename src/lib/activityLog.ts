@@ -2,7 +2,7 @@
 // LogEntry shape, but persisted and realtime-synced across viewers instead
 // of living only in the browser tab that made the edit.
 
-import { REPORT_ID } from './chartState.ts';
+import { REPORT_ID } from './reportToolSupport.ts';
 import { supabase } from './supabase.ts';
 import type { LogEntry } from '../components/ActivityLog.tsx';
 

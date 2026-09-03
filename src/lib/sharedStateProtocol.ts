@@ -5,6 +5,7 @@
 
 export type SharedMutation =
   | { kind: 'chart_patch'; chartId: string; patch: Record<string, unknown>; actor: 'person' | 'agent' }
+  | { kind: 'chart_contract'; chartId: string; contract: Record<string, unknown>; actor: 'person' | 'agent' }
   | { kind: 'filter_patch'; patch: Record<string, unknown>; actor: 'person' | 'agent' }
   | { kind: 'undo'; actor: 'person'; restoreState: Record<string, unknown>; undoOfVersion: number };
 
