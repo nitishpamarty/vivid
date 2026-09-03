@@ -47,7 +47,7 @@ export function registerUsageTools(bridge: UsageToolBridge): () => void {
   const tools = [
     tool(
       'get_usage_context',
-      'Get the active Product Usage report id, the current filters (ownerTeam, reportId, asOfMonth), current KPIs, visible top reports, team shares, available filter options, and the explicit global scope of the activity heatmap (a typical-week aggregate not cross-filtered by these filters).',
+      'Get the active Product Usage report id, the current filters (ownerTeam, reportId, asOfMonth), current KPIs, visible top reports, team shares, available filter options, and the explicit global scope of the activity heatmap (a typical-week aggregate not cross-filtered by these filters). Product Usage charts have no presentation/chart-type tool — only filters can be changed here; do not guess or recall a chart-type capability from another report before checking that report\'s own tools.',
       { type: 'object', properties: {} },
       () => ({ ok: true, data: bridge.getContext() }),
     ),

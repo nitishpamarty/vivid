@@ -3,7 +3,6 @@ export type ReportId = 'revenue' | 'usage' | 'explore';
 const REPORTS: { id: ReportId; label: string; sub: string }[] = [
   { id: 'revenue', label: 'Revenue', sub: 'Revenue overview · fictional demo data' },
   { id: 'usage', label: 'Product Usage', sub: 'Activity OS · fictional demo data' },
-  { id: 'explore', label: 'Connect Data', sub: 'Connect a dataset · co-author a chart with the agent' },
 ];
 
 interface Props {

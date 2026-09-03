@@ -1,5 +1,16 @@
 # Governed Revenue Chart Editing — Implementation Plan
 
+**Status: Done (2026-09-02).** Phases 0–5 are implemented and verified live at
+https://vividdata.pages.dev — arr_mix, top_accounts, and net_new_logos switch
+between their approved presentations via `set_report_chart_contract`, fixed
+charts (arr_bridge, retention_nrr, retention_churn) correctly reject
+presentation changes, and mutations persist/undo/log through the existing
+shared-state pipeline. Production required applying
+`supabase/migrations/0007_revenue_chart_contract_mutations.sql`, which had
+been merged but not deployed; that's now applied. See also the
+`registerWebMcpTools.ts` error-surfacing fix (commit `b05f539`) made while
+diagnosing the migration gap.
+
 ## Purpose
 
 Enable safe in-place editing of curated Revenue panels by reusing the new

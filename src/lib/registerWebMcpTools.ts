@@ -79,7 +79,7 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
     ),
     tool(
       'list_report_chart_options',
-      'List the six Revenue chart contracts, their approved presentations, renderer ids, defaults, and fixed invariants. These are intent-only options; raw fields, data, queries, and Vega specifications are not accepted.',
+      'List the six Revenue chart contracts, their approved presentations, renderer ids, defaults, and fixed invariants. These are intent-only options; raw fields, data, queries, and Vega specifications are not accepted. Scope: Revenue report only — call this before claiming any Revenue chart does or does not support a presentation, and never extrapolate its results to charts on other reports (e.g. Product Usage), which have no presentation-contract tool at all.',
       { type: 'object', properties: {} },
       () => ({ ok: true, data: reportChartOptions() }),
     ),

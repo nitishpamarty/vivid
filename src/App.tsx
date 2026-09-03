@@ -30,7 +30,6 @@ import { TopAccounts } from './components/TopAccounts';
 import { NewLogosHeatmap } from './components/NewLogosHeatmap';
 import { ActivityLog, type LogEntry } from './components/ActivityLog';
 import { UsageDashboard } from './components/UsageDashboard';
-import { ExploreDashboard } from './components/ExploreDashboard';
 import { buildRoomUrl, createRoomSession, parseRoomSession, type RoomSession } from './lib/roomSession';
 import { createSharedRoom, mutateSharedState } from './lib/sharedStateClient';
 import { mutationBlockReason, shouldApplyVersion, type SharedStatus } from './lib/sharedStateLifecycle';
@@ -417,8 +416,6 @@ export default function App() {
       </div>
     );
   }
-
-  if (report === 'explore') return <ExploreDashboard report={report} onChangeReport={setReport} session={session} />;
 
   if (error) return <div className="northbeam"><div className="error">Failed to load data: {error}</div></div>;
   if (!data) return <div className="northbeam"><div className="loading">Loading Northbeam data…</div></div>;
