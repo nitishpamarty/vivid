@@ -31,7 +31,7 @@ export function buildArrBridgeSpec(
         data: { values: points },
         mark: { type: 'bar', cornerRadius: 2, width: { band: knobs.barWidth } },
         encoding: {
-          x: { field: 'label', type: 'ordinal', sort: order, axis: { domain: false, ticks: false, grid: false, labelColor: colors.inkSecondary, labelFontSize: 10, title: null } },
+          x: { field: 'label', type: 'ordinal', sort: order, axis: { domain: false, ticks: false, grid: false, labelColor: colors.inkSecondary, labelFontSize: 10, labelAngle: 0, labelAlign: 'center', title: null } },
           y: { field: 'priorCum', type: 'quantitative', axis: null, scale: { zero: false } },
           y2: { field: 'newCum' },
           color: {
