@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebMCP Story</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    --paper:#faf9f6;
+    --ink:#15171c;
+    --muted:#a7a29a;
+    --line:#e7e3da;
+    --accent:#3352ff;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Instrument Sans",sans-serif;
+    overflow:hidden;
+  }
+  body.clickable{ cursor:pointer; }
+
+  /* top-right screen nav */
+  .nav{
+    position:fixed; top:20px; right:24px; z-index:1000;
+    display:flex; gap:8px; align-items:center;
+    background:#fff; border:1px solid var(--line); border-radius:999px;
+    padding:6px; box-shadow:0 1px 3px rgba(21,23,28,.05);
+  }
+  .nav button{
+    width:26px; height:26px; border-radius:50%; padding:0;
+    border:1px solid var(--line); background:transparent; color:var(--muted);
+    font:600 12px "IBM Plex Mono",monospace; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .nav button:hover{ border-color:var(--ink); color:var(--ink); }
+  .nav button.active{ background:var(--ink); border-color:var(--ink); color:#fff; }
+
+  .screen{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; }
+  .screen.active{ display:flex; }
+
+  /* ---------- screen 1 ---------- */
+  #s1 .stage{ display:flex; flex-direction:column; align-items:center; cursor:pointer; }
+  #s1 h1{
+    margin:0; font:700 clamp(34px,6.2vw,72px)/1.05 "Instrument Sans",sans-serif;
+    letter-spacing:-.02em; text-align:center; text-wrap:balance;
+    opacity:0; transform:translateY(10px);
+    animation:s1rise .7s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  #s1 .branches{ width:min(78vw,520px); margin-top:6px; }
+  #s1 .branches path{
+    fill:none; stroke:var(--muted); stroke-width:1.5;
+    stroke-dasharray:260; stroke-dashoffset:260;
+    animation:s1draw 1s cubic-bezier(.2,.8,.2,1) forwards; animation-delay:.55s;
+  }
+  #s1 .branches text{
+    font:600 20px "Instrument Sans",sans-serif; fill:var(--accent);
+    opacity:0; animation:s1rise .6s cubic-bezier(.2,.8,.2,1) forwards; animation-delay:1.3s;
+  }
+  @keyframes s1rise{ to{ opacity:1; transform:none; } }
+  @keyframes s1draw{ to{ stroke-dashoffset:0; } }
+
+  /* ---------- screen 2 ---------- */
+  #s2 .dots{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); display:flex; gap:10px; }
+  #s2 .dots button{ width:7px; height:7px; border-radius:50%; border:none; background:var(--line); padding:0; cursor:pointer; }
+  #s2 .dots button.on{ background:var(--accent); }
+  #s2 .hint{ position:fixed; right:24px; bottom:24px; font:500 11px/1 "IBM Plex Mono",monospace; color:var(--muted); letter-spacing:.06em; }
+  #s2 .beat{ max-width:720px; padding:0 32px; text-align:center; animation:s2rise .5s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes s2rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  #s2 .eyebrow{ margin:0 0 14px; font:500 12px/1 "IBM Plex Mono",monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); }
+  #s2 h1{ margin:0; font:700 clamp(28px,4.6vw,52px)/1.15 "Instrument Sans",sans-serif; letter-spacing:-.01em; text-wrap:balance; }
+  #s2 h1.quiet{ font-weight:500; color:var(--muted); }
+  #s2 .cap{ margin:16px 0 0; font-size:clamp(14px,1.6vw,17px); color:var(--muted); }
+  #s2 em{ color:var(--accent); font-style:normal; }
+  #s2 .echoes{ display:flex; justify-content:center; gap:22px; margin-top:26px; }
+  #s2 .echoes span{ font:500 13px "IBM Plex Mono",monospace; color:var(--line); opacity:0; transform:translateY(4px); animation:s2pop .4s ease forwards; }
+  #s2 .echoes span:nth-child(1){ animation-delay:.45s; }
+  #s2 .echoes span:nth-child(2){ animation-delay:.7s; color:#cfcabf; }
+  #s2 .echoes span:nth-child(3){ animation-delay:.95s; color:var(--muted); }
+  @keyframes s2pop{ to{ opacity:1; transform:none; } }
+  #s2 .cards{ display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
+  #s2 .card{ width:230px; border:1px solid var(--line); border-radius:14px; padding:22px 18px; text-align:left; }
+  #s2 .card .tag{ margin:0 0 8px; font:600 11px "IBM Plex Mono",monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--ink); }
+  #s2 .card .cap{ margin:0; font-size:13px; line-height:1.5; }
+
+  /* ---------- screen 3 ---------- */
+  #s3 .stack{ display:flex; flex-direction:column; align-items:center; gap:34px; cursor:pointer; }
+  #s3 .formula{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; justify-content:center; max-width:900px; padding:0 24px; }
+  #s3 .piece{ display:flex; flex-direction:column; align-items:center; gap:9px; opacity:0; transform:translateY(8px); animation:s3rise .55s cubic-bezier(.2,.8,.2,1) forwards; }
+  #s3 .box{ border:1px solid var(--line); border-radius:12px; padding:13px 18px; font:600 14px "IBM Plex Mono",monospace; white-space:nowrap; background:#fff; }
+  #s3 .cap{ font-size:11.5px; color:var(--muted); letter-spacing:.01em; }
+  #s3 .op{ font:600 26px "Instrument Sans",sans-serif; color:var(--muted); opacity:0; animation:s3rise .4s ease forwards; }
+  #s3 .p1{ animation-delay:.1s; } #s3 .op1{ animation-delay:.55s; }
+  #s3 .p2{ animation-delay:.7s; }  #s3 .op2{ animation-delay:1.15s; }
+  #s3 .p3{ animation-delay:1.3s; }
+  #s3 .result{ text-align:center; opacity:0; transform:scale(.92); animation:s3land .6s cubic-bezier(.2,.8,.2,1) forwards; animation-delay:1.95s; }
+  #s3 .result .eq{ font:600 26px "Instrument Sans",sans-serif; color:var(--muted); margin-bottom:6px; }
+  #s3 .result h1{ margin:0; font:700 clamp(38px,7vw,72px)/1 "Instrument Sans",sans-serif; letter-spacing:-.02em; color:var(--accent); }
+  @keyframes s3rise{ to{ opacity:1; transform:none; } }
+  @keyframes s3land{ to{ opacity:1; transform:none; } }
+
+  /* ---------- screen 4 ---------- */
+  #s4 .toggle{ position:fixed; right:24px; bottom:24px; font:500 11px "IBM Plex Mono",monospace; color:var(--muted); letter-spacing:.06em; background:none; border:none; cursor:pointer; padding:4px; }
+  #s4 .toggle:hover{ color:var(--ink); }
+  #s4 .rail{ position:relative; width:min(84vw,980px); }
+  #s4 .rail svg{ width:100%; height:24px; overflow:visible; display:block; }
+  #s4 .base{ fill:none; stroke:var(--line); stroke-width:2; }
+  #s4 .fill{ fill:none; stroke:var(--accent); stroke-width:2; }
+  #s4 .tick{ stroke:var(--line); stroke-width:2; }
+  #s4 .tick.lit{ stroke:var(--accent); }
+  #s4 .head{ fill:var(--accent); filter:drop-shadow(0 0 5px rgba(51,82,255,.5)); }
+  #s4 .labels{ position:relative; width:100%; height:30px; margin-top:6px; }
+  #s4 .label{ position:absolute; top:0; transform:translateX(-50%); font:500 13px "IBM Plex Mono",monospace; color:var(--muted); white-space:nowrap; transition:color .3s ease; letter-spacing:.01em; }
+  #s4 .label.start{ transform:none; }
+  #s4 .label.end{ transform:translateX(-100%); }
+  #s4 .label.lit{ color:var(--ink); }
+  #s4 .label.lit.answer{ color:var(--accent); }
+
+  @media (prefers-reduced-motion: reduce){
+    #s1 h1, #s1 .branches path, #s1 .branches text,
+    #s2 .beat, #s2 .echoes span,
+    #s3 .piece, #s3 .op, #s3 .result{ animation:none !important; opacity:1 !important; transform:none !important; stroke-dashoffset:0 !important; }
+    #s4 .head{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="nav" id="nav">
+  <button data-n="1">1</button>
+  <button data-n="2">2</button>
+  <button data-n="3">3</button>
+  <button data-n="4">4</button>
+</div>
+
+<section class="screen" id="s1">
+  <div class="stage" id="stage1" title="Click to replay">
+    <h1 id="title">Data Visualization</h1>
+    <svg class="branches" viewBox="0 0 480 130">
+      <path d="M240,2 C240,40 90,40 90,80" />
+      <path d="M240,2 C240,40 390,40 390,80" />
+      <text x="90" y="108" text-anchor="middle">Visual</text>
+      <text x="390" y="108" text-anchor="middle">Iterative</text>
+    </svg>
+  </div>
+</section>
+
+<section class="screen" id="s2">
+  <div id="beatStage"></div>
+  <div class="dots" id="dots"></div>
+  <div class="hint">click / &rarr;</div>
+</section>
+
+<section class="screen" id="s3">
+  <div class="stack" id="stage3">
+    <div class="formula">
+      <div class="piece p1"><span class="box">MCP</span><span class="cap">reach the data</span></div>
+      <span class="op op1">+</span>
+      <div class="piece p2"><span class="box">WebMCP &middot; BI tool</span><span class="cap">reshape the report</span></div>
+      <span class="op op2">+</span>
+      <div class="piece p3"><span class="box">WebMCP &middot; Semantic layer</span><span class="cap">ground the meaning</span></div>
+    </div>
+    <div class="result"><div class="eq">=</div><h1>Powerful.</h1></div>
+  </div>
+</section>
+
+<section class="screen" id="s4">
+  <div class="rail">
+    <svg viewBox="0 0 1000 24" preserveAspectRatio="none">
+      <path class="base" d="M40,12 L960,12" />
+      <path class="fill" id="fillPath" d="M40,12 L960,12" />
+      <line class="tick" data-f="0"     x1="40"  y1="4" x2="40"  y2="20" />
+      <line class="tick" data-f="0.370" x1="380" y1="4" x2="380" y2="20" />
+      <line class="tick" data-f="0.674" x1="660" y1="4" x2="660" y2="20" />
+      <line class="tick" data-f="1"     x1="960" y1="4" x2="960" y2="20" />
+      <circle class="head" id="head" cx="40" cy="12" r="5" />
+    </svg>
+    <div class="labels">
+      <span class="label start" data-f="0" style="left:4%">Question</span>
+      <span class="label" data-f="0.370" style="left:38%">WebMCP &middot; BI</span>
+      <span class="label" data-f="0.674" style="left:66%">WebMCP &middot; Semantic</span>
+      <span class="label end answer" data-f="1" style="left:96%">Answer</span>
+    </div>
+  </div>
+  <button class="toggle" id="toggle">pause</button>
+</section>
+
+<script>
+(function(){
+  var SCREENS = 4;
+  var current = 1;
+  var navBtns = document.querySelectorAll('.nav button');
+  var sections = { 1: document.getElementById('s1'), 2: document.getElementById('s2'), 3: document.getElementById('s3'), 4: document.getElementById('s4') };
+
+  function showScreen(n){
+    current = n;
+    Object.keys(sections).forEach(function(k){ sections[k].classList.toggle('active', +k === n); });
+    navBtns.forEach(function(b){ b.classList.toggle('active', +b.dataset.n === n); });
+    document.body.classList.toggle('clickable', n === 1 || n === 2 || n === 3);
+  }
+  navBtns.forEach(function(b){
+    b.addEventListener('click', function(e){ e.stopPropagation(); showScreen(+b.dataset.n); });
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key >= '1' && e.key <= '4') showScreen(+e.key);
+  });
+
+  /* ---------- screen 1: replay on click ---------- */
+  document.getElementById('stage1').addEventListener('click', function(){
+    var els = this.querySelectorAll('h1, .branches path, .branches text');
+    els.forEach(function(el){ el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; });
+  });
+
+  /* ---------- screen 2: click-through beats ---------- */
+  var BEATS = [
+    '<div class="beat"><p class="eyebrow">MCP</p><h1>Gets you to the data.</h1></div>',
+    '<div class="beat"><h1>One prompt. One chart.</h1><p class="cap">if you already know what you want.</p></div>',
+    '<div class="beat"><h1 class="quiet">Then someone looks at it.</h1></div>',
+    '<div class="beat"><h1>The real work is iterative.</h1><div class="echoes"><span>again</span><span>again</span><span>again</span></div></div>',
+    '<div class="beat"><div class="cards">' +
+      '<div class="card"><p class="tag">Lock-in</p><p class="cap">Edits go back through their UI.</p></div>' +
+      '<div class="card"><p class="tag">Context-blind</p><p class="cap">The agent can\'t reach your semantic layer.</p></div>' +
+    '</div></div>',
+    '<div class="beat"><h1><em>WebMCP</em> fixes this.</h1><p class="cap">One tool surface, right in the browser.</p></div>'
+  ];
+  var beatStage = document.getElementById('beatStage');
+  var dotsEl = document.getElementById('dots');
+  var bi = 0;
+  BEATS.forEach(function(_, n){
+    var b = document.createElement('button');
+    b.addEventListener('click', function(e){ e.stopPropagation(); goBeat(n); });
+    dotsEl.appendChild(b);
+  });
+  function renderBeat(){
+    beatStage.innerHTML = BEATS[bi];
+    [].slice.call(dotsEl.children).forEach(function(d, n){ d.classList.toggle('on', n === bi); });
+  }
+  function goBeat(n){ bi = (n + BEATS.length) % BEATS.length; renderBeat(); }
+  function nextBeat(){ goBeat(bi === BEATS.length - 1 ? 0 : bi + 1); }
+  function prevBeat(){ goBeat(bi - 1); }
+  document.getElementById('s2').addEventListener('click', function(e){
+    if (e.target.closest('.dots')) return;
+    nextBeat();
+  });
+  document.addEventListener('keydown', function(e){
+    if (current !== 2) return;
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextBeat(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prevBeat(); }
+    else if (e.key === 'Home') { goBeat(0); }
+  });
+  renderBeat();
+
+  /* ---------- screen 3: replay on click ---------- */
+  document.getElementById('stage3').addEventListener('click', function(){
+    var els = this.querySelectorAll('.piece, .op, .result');
+    els.forEach(function(el){ el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; });
+  });
+
+  /* ---------- screen 4: looping trace ---------- */
+  var path = document.getElementById('fillPath');
+  var head = document.getElementById('head');
+  var len = path.getTotalLength();
+  var ticks = document.querySelectorAll('#s4 .tick');
+  var labels = document.querySelectorAll('#s4 .label');
+  var TRAVEL = 8000, HOLD = 1800, TOTAL = TRAVEL + HOLD;
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var playing4 = !reduced;
+  var start4 = performance.now();
+  var toggleBtn = document.getElementById('toggle');
+  toggleBtn.textContent = playing4 ? 'pause' : 'play';
+  toggleBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    playing4 = !playing4;
+    toggleBtn.textContent = playing4 ? 'pause' : 'play';
+    if (playing4) start4 = performance.now();
+  });
+  function render4(f){
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len * (1 - f);
+    var pt = path.getPointAtLength(len * f);
+    head.setAttribute('cx', pt.x); head.setAttribute('cy', pt.y);
+    ticks.forEach(function(t){ t.classList.toggle('lit', f >= (+t.dataset.f - 0.001)); });
+    labels.forEach(function(l){ l.classList.toggle('lit', f >= (+l.dataset.f - 0.001)); });
+  }
+  function frame4(now){
+    if (playing4){
+      var e = (now - start4) % TOTAL;
+      var f = e < TRAVEL ? e / TRAVEL : 1;
+      render4(f);
+    }
+    requestAnimationFrame(frame4);
+  }
+  render4(reduced ? 1 : 0);
+  requestAnimationFrame(frame4);
+
+  showScreen(1);
+})();
+</script>
+</body>
+</html>

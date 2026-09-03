@@ -34,6 +34,7 @@ import { buildRoomUrl, createRoomSession, parseRoomSession, type RoomSession } f
 import { createSharedRoom, mutateSharedState } from './lib/sharedStateClient';
 import { mutationBlockReason, shouldApplyVersion, type SharedStatus } from './lib/sharedStateLifecycle';
 import { addUndoFrame, invalidateUndoFrames, popUndoFrame, type UndoFrame } from './lib/undoState';
+import { WorkflowArtifact } from './components/WorkflowArtifact';
 
 function RevenueDashboard({ data, report, onChangeReport, session }: { data: NorthbeamData; report: ReportId; onChangeReport: (r: ReportId) => void; session: RoomSession }) {
   // Calendar axis stays derived from the unfiltered data so windowing
@@ -407,6 +408,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
 }
 
 export default function App() {
+  if (window.location.pathname.startsWith('/workflow')) return <WorkflowArtifact />;
   const [report, setReport] = useState<ReportId>('revenue');
   const [session, setSession] = useState<RoomSession | null>(() => parseRoomSession(window.location.href));
   const [data, setData] = useState<{ revenue: NorthbeamData; usage: UsageData } | null>(null);
