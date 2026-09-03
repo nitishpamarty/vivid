@@ -41,10 +41,18 @@ function tool(name: string, description: string, inputSchema: Record<string, unk
       try {
         return await run(input ?? {});
       } catch (error) {
-        if (error instanceof Error && error.message === 'not_ready') {
-          return { ok: false, reason: 'not_ready', error: 'Shared session is still connecting.' };
+        if (!(error instanceof Error)) {
+          return { ok: false, reason: 'unavailable', error: 'Shared session is unavailable. Try again.' };
         }
-        return { ok: false, reason: 'unavailable', error: 'Shared session is unavailable. Try again.' };
+        // applySharedMutation sets error.name to the backend's reason and error.message
+        // to its human-readable text; mutationBlockReason instead throws with the reason
+        // as the message. Either way, surface the real reason/text instead of collapsing
+        // every failure into a generic "unavailable".
+        const reason = error.name !== 'Error' ? error.name : error.message;
+        const message = reason === 'not_ready' ? 'Shared session is still connecting.'
+          : reason === 'unavailable' ? 'Shared session is unavailable. Try again.'
+          : error.message;
+        return { ok: false, reason, error: message };
       }
     },
   };
