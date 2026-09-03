@@ -4,7 +4,9 @@
 // Revenue report's knobs — pure state/logic, no React, no DOM.
 
 import type { VisualizationSpec } from 'vega-embed';
-import { supabase } from './supabase';
+import type { NormalizedQueryContract, QueryDatasetId } from './queryContract.ts';
+import { supabase } from './supabase.ts';
+import { readEdgeFunctionError } from './edgeFunctionErrors.ts';
 
 export interface DatasetDef {
   id: string;
@@ -39,6 +41,83 @@ export async function fetchDatasetRows(dataset: DatasetDef): Promise<DatasetRows
   const rows = data ?? [];
   const totalCount = count ?? rows.length;
   return { rows, totalCount, sampled: totalCount > rows.length };
+}
+
+export interface AggregateQueryMetadata {
+  sourceTables: string[];
+  relationshipPath: string[];
+  truncated: boolean;
+  resultCount: number;
+  appliedLimits: {
+    limit: number;
+    offset: number;
+    maxSourceRows: number;
+    maxResponseBytes: number;
+    statementTimeoutMs: number;
+  };
+}
+
+export interface AggregateQueryData {
+  rows: Record<string, unknown>[];
+  metadata: AggregateQueryMetadata;
+}
+
+export class AggregateQueryError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string, message: string) {
+    super(message);
+    this.name = 'AggregateQueryError';
+    this.reason = reason;
+  }
+}
+
+function isAggregateQueryMetadata(value: unknown): value is AggregateQueryMetadata {
+  if (!value || typeof value !== 'object') return false;
+  const metadata = value as Record<string, unknown>;
+  const limits = metadata.appliedLimits;
+  return Array.isArray(metadata.sourceTables)
+    && metadata.sourceTables.every((table) => typeof table === 'string')
+    && Array.isArray(metadata.relationshipPath)
+    && metadata.relationshipPath.every((relationship) => typeof relationship === 'string')
+    && typeof metadata.truncated === 'boolean'
+    && typeof metadata.resultCount === 'number'
+    && Number.isInteger(metadata.resultCount)
+    && !!limits
+    && typeof limits === 'object'
+    && ['limit', 'offset', 'maxSourceRows', 'maxResponseBytes', 'statementTimeoutMs'].every((key) => typeof (limits as Record<string, unknown>)[key] === 'number');
+}
+
+/** Execute the validated query through the protected aggregate Edge Function. */
+export async function fetchDatasetAggregate(query: NormalizedQueryContract): Promise<AggregateQueryData> {
+  const { data, error } = await supabase.functions.invoke('aggregate-query', {
+    body: { operation: 'query', query },
+  });
+  if (error) {
+    const safe = await readEdgeFunctionError(error);
+    throw new AggregateQueryError(safe?.reason ?? 'unavailable', safe?.error ?? 'Aggregate query service is unavailable. Try again.');
+  }
+  if (!data || typeof data !== 'object') throw new AggregateQueryError('invalid_response', 'Aggregate query returned no usable result.');
+  const envelope = data as { ok?: unknown; reason?: unknown; error?: unknown; data?: unknown };
+  if (envelope.ok !== true) {
+    const reason = typeof envelope.reason === 'string' ? envelope.reason : 'unavailable';
+    const message = reason === 'rate_limited'
+      ? 'Aggregate query quota exceeded. Try again shortly.'
+      : reason === 'timeout'
+        ? 'Aggregate query timed out. Try a smaller query.'
+        : reason === 'payload_too_large' || reason === 'limit_exceeded'
+          ? 'The aggregate query exceeds the server limits.'
+          : typeof envelope.error === 'string' ? envelope.error : 'Aggregate query could not be completed.';
+    throw new AggregateQueryError(
+      reason,
+      message,
+    );
+  }
+  const result = envelope.data as { rows?: unknown; metadata?: unknown } | undefined;
+  if (!result || !Array.isArray(result.rows) || !result.rows.every((row) => row && typeof row === 'object' && !Array.isArray(row)) || !isAggregateQueryMetadata(result.metadata)) {
+    throw new AggregateQueryError('invalid_response', 'Aggregate query returned an invalid result.');
+  }
+  return { rows: result.rows as Record<string, unknown>[], metadata: result.metadata };
 }
 
 // ---- schema inference ----
@@ -119,6 +198,10 @@ export function applyDisplayTypeOverrides(
 export const MARK_OPTIONS = ['bar', 'line', 'point', 'arc'] as const;
 export type ExploreMark = (typeof MARK_OPTIONS)[number];
 
+// Bump only when the persisted/tool contract shape changes. Older callers may
+// omit this field and are normalized to v1 below.
+export const CHART_CONTRACT_VERSION = 1 as const;
+
 export const CHANNEL_OPTIONS = ['x', 'y', 'color', 'theta'] as const;
 export type ExploreChannel = (typeof CHANNEL_OPTIONS)[number];
 
@@ -130,23 +213,28 @@ export type ExploreAggregate = (typeof AGGREGATE_OPTIONS)[number];
 
 export interface ExploreEncodingField {
   field: string;
+  /** Set only by the canvas composer, and only with an approved relationship path. */
+  dataset?: QueryDatasetId;
   type: ExploreEncodingType;
   aggregate?: ExploreAggregate;
   bin?: boolean;
 }
 
 export interface ExploreChartContract {
+  version: typeof CHART_CONTRACT_VERSION;
   mark: ExploreMark;
   encoding: Partial<Record<ExploreChannel, ExploreEncodingField>>;
   title?: string;
+  /** Add safe, app-derived tooltips for the encoded aggregate fields. */
+  tooltip?: boolean;
 }
 
 export type ContractResult =
   | { ok: true; contract: ExploreChartContract }
   | { ok: false; reason: string; error: string };
 
-const CONTRACT_KEYS = ['mark', 'encoding', 'title'];
-const CHANNEL_FIELD_KEYS = ['field', 'type', 'aggregate', 'bin'];
+const CONTRACT_KEYS = ['version', 'mark', 'encoding', 'title', 'tooltip'];
+const CHANNEL_FIELD_KEYS = ['field', 'dataset', 'type', 'aggregate', 'bin'];
 
 export function validateChartContract(input: unknown, columns: string[]): ContractResult {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
@@ -155,7 +243,10 @@ export function validateChartContract(input: unknown, columns: string[]): Contra
   const obj = input as Record<string, unknown>;
   const unknownTop = Object.keys(obj).filter((k) => !CONTRACT_KEYS.includes(k));
   if (unknownTop.length > 0) {
-    return { ok: false, reason: 'unknown_field', error: `"${unknownTop.join(', ')}" is not part of the chart contract. The app owns data/transform/config — only mark, encoding, and title are agent-editable.` };
+    return { ok: false, reason: 'unknown_field', error: `"${unknownTop.join(', ')}" is not part of the chart contract. The app owns data/transform/config/url — only version, mark, encoding, title, and tooltip are agent-editable.` };
+  }
+  if (obj.version !== undefined && obj.version !== CHART_CONTRACT_VERSION) {
+    return { ok: false, reason: 'invalid_value', error: `"version" must be ${CHART_CONTRACT_VERSION}.` };
   }
   if (!MARK_OPTIONS.includes(obj.mark as ExploreMark)) {
     return { ok: false, reason: 'invalid_value', error: `"mark" must be one of ${MARK_OPTIONS.join(', ')}.` };
@@ -184,6 +275,9 @@ export function validateChartContract(input: unknown, columns: string[]): Contra
     if (typeof c.field !== 'string' || !columns.includes(c.field)) {
       return { ok: false, reason: 'invalid_value', error: `encoding.${channel}.field must be one of the active dataset's columns: ${columns.join(', ')}.` };
     }
+    if (c.dataset !== undefined && (typeof c.dataset !== 'string' || !Object.prototype.hasOwnProperty.call(DATASET_CATALOG, c.dataset))) {
+      return { ok: false, reason: 'invalid_value', error: 'encoding.dataset must be an approved dataset id.' };
+    }
     if (!ENCODING_TYPE_OPTIONS.includes(c.type as ExploreEncodingType)) {
       return { ok: false, reason: 'invalid_value', error: `encoding.${channel}.type must be one of ${ENCODING_TYPE_OPTIONS.join(', ')}.` };
     }
@@ -205,15 +299,28 @@ export function validateChartContract(input: unknown, columns: string[]): Contra
       }
     }
     encoding[channel as ExploreChannel] = {
-      field: c.field, type, ...(c.aggregate !== undefined ? { aggregate: c.aggregate as ExploreAggregate } : {}), ...(c.bin !== undefined ? { bin: c.bin as boolean } : {}),
+      field: c.field, ...(c.dataset !== undefined ? { dataset: c.dataset as QueryDatasetId } : {}), type,
+      ...(c.aggregate !== undefined ? { aggregate: c.aggregate as ExploreAggregate } : {}), ...(c.bin !== undefined ? { bin: c.bin as boolean } : {}),
     };
   }
 
-  if (mark === 'arc' && !encoding.theta) {
-    return { ok: false, reason: 'missing_channel', error: '"arc" requires a "theta" channel.' };
-  }
-  if (mark !== 'arc' && (!encoding.x || !encoding.y)) {
-    return { ok: false, reason: 'missing_channel', error: `"${mark}" requires both "x" and "y" channels.` };
+  if (mark === 'arc') {
+    if (!encoding.theta) {
+      return { ok: false, reason: 'missing_channel', error: '"arc" requires a "theta" channel.' };
+    }
+    if (encoding.x || encoding.y) {
+      return { ok: false, reason: 'invalid_combination', error: '"arc" supports theta and optional color channels; x and y are not valid.' };
+    }
+    if (encoding.theta.type !== 'quantitative') {
+      return { ok: false, reason: 'invalid_combination', error: '"arc" theta must use a quantitative field.' };
+    }
+  } else {
+    if (!encoding.x || !encoding.y) {
+      return { ok: false, reason: 'missing_channel', error: `"${mark}" requires both "x" and "y" channels.` };
+    }
+    if (encoding.theta) {
+      return { ok: false, reason: 'invalid_combination', error: `"${mark}" does not support a theta channel.` };
+    }
   }
 
   if (obj.title !== undefined) {
@@ -222,7 +329,20 @@ export function validateChartContract(input: unknown, columns: string[]): Contra
     }
   }
 
-  return { ok: true, contract: { mark, encoding, title: obj.title as string | undefined } };
+  if (obj.tooltip !== undefined && typeof obj.tooltip !== 'boolean') {
+    return { ok: false, reason: 'invalid_value', error: '"tooltip" must be a boolean.' };
+  }
+
+  return {
+    ok: true,
+    contract: {
+      version: CHART_CONTRACT_VERSION,
+      mark,
+      encoding,
+      title: obj.title as string | undefined,
+      ...(obj.tooltip !== undefined ? { tooltip: obj.tooltip as boolean } : {}),
+    },
+  };
 }
 
 // x: the string/date column with the fewest distinct values in the sample
@@ -241,6 +361,7 @@ export function buildDefaultContract(columns: Record<string, ColumnType>, rows: 
   const numeric = entries.find(([, t]) => t === 'number');
 
   return {
+    version: CHART_CONTRACT_VERSION,
     mark: 'bar',
     encoding: {
       x: { field: xCol, type: xType === 'date' ? 'temporal' : 'nominal' },
@@ -253,11 +374,26 @@ export function buildDefaultContract(columns: Record<string, ColumnType>, rows: 
 
 // App-owned — never called with agent-supplied data. Only place data.values
 // enters a chart the agent can edit.
-export function buildVegaLiteSpec(contract: ExploreChartContract, rows: Record<string, unknown>[]): VisualizationSpec {
+export function buildVegaLiteSpec(
+  contract: ExploreChartContract,
+  rows: Record<string, unknown>[],
+  fieldAliases: Partial<Record<ExploreChannel, string>> = {},
+): VisualizationSpec {
   const encoding: Record<string, unknown> = {};
   for (const [channel, field] of Object.entries(contract.encoding)) {
     if (!field) continue;
-    encoding[channel] = field;
+    const alias = fieldAliases[channel as ExploreChannel];
+    // Aggregate queries already return one row per group. Keep aggregate/bin
+    // in the raw-row mode, but never ask Vega-Lite to aggregate the result a
+    // second time when a server output alias is present.
+    // dataset is a query-contract provenance hint, not a Vega encoding key.
+    const { aggregate, bin, dataset: _dataset, ...base } = field;
+    encoding[channel] = alias
+      ? { ...base, field: alias }
+      : { ...base, ...(aggregate !== undefined ? { aggregate } : {}), ...(bin !== undefined ? { bin } : {}) };
+  }
+  if (contract.tooltip) {
+    encoding.tooltip = Object.values(encoding).map((field) => ({ ...(field as Record<string, unknown>) }));
   }
   return {
     data: { values: rows },

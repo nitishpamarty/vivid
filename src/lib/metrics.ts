@@ -1,4 +1,4 @@
-import type { AcquisitionChannel, NorthbeamData, Region, Segment } from './types';
+import type { AcquisitionChannel, NorthbeamData, Region, Segment } from './types.ts';
 
 // All months present in the dataset, sorted ascending (YYYY-MM sorts lexically).
 export function monthList(data: NorthbeamData): string[] {

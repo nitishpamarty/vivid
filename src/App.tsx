@@ -13,6 +13,7 @@ import {
 } from './lib/chartState';
 import { applyReportFilters, type ReportFilters } from './lib/reportFilters';
 import { registerNorthbeamTools } from './lib/registerWebMcpTools';
+import { registerSemanticWebMcpTools } from './lib/registerSemanticWebMcpTools';
 import { getBusinessDefinitions, queryBusinessMetric } from './lib/semanticLayerClient';
 import { loadActivityLog, subscribeActivityLog } from './lib/activityLog';
 import { Topbar, type ReportId } from './components/Topbar';
@@ -41,7 +42,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
   const [dashboard, setDashboard] = useState<DashboardState>(DEFAULT_DASHBOARD_STATE);
   const [version, setVersion] = useState(0);
   const [sharedStatus, setSharedStatus] = useState<SharedStatus>('connecting');
-  const [undoStack, setUndoStack] = useState<UndoFrame[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoFrame<DashboardState>[]>([]);
   const [undoNotice, setUndoNotice] = useState('');
   const [log, setLog] = useState<LogEntry[]>([]);
   const dashboardRef = useRef(dashboard);
@@ -94,7 +95,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     const unsubLog = subscribeActivityLog((entry) => {
       setLog((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry].slice(-50)));
     }, 'northbeam', session.roomId);
-    void createSharedRoom(session, DEFAULT_DASHBOARD_STATE, 4)
+    void createSharedRoom<DashboardState>(session, DEFAULT_DASHBOARD_STATE, 4)
       .then((result) => {
         if (!active || !result.ok) throw new Error('unavailable');
         return loadDashboardSnapshot('northbeam', session.roomId);
@@ -114,8 +115,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
     if (blockReason) throw new Error(blockReason);
     const current = dashboardRef.current;
     const expectedVersion = versionRef.current;
-    let result: Awaited<ReturnType<typeof mutateSharedState>>;
-    result = await mutateSharedState(session, expectedVersion, mutation);
+    const result = await mutateSharedState<DashboardState>(session, expectedVersion, mutation);
     if (!result.ok) {
       const error = new Error(result.error);
       error.name = result.reason;
@@ -155,14 +155,18 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
       getAccountMatches: (query: string) => accountDirectoryRef.current
         .filter((account) => account.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
       getValidAccountNames: () => data.customers.map((c) => c.name),
-      getBusinessDefinitions,
-      queryBusinessMetric,
+    };
+    const semanticBridge = { getBusinessDefinitions, queryBusinessMetric };
+    const registerAll = () => {
+      const unregisterChart = registerNorthbeamTools(bridge);
+      const unregisterSemantic = registerSemanticWebMcpTools(semanticBridge);
+      return () => { unregisterChart(); unregisterSemantic(); };
     };
     // A real WebMCP browser injects document.modelContext at document_start, before this
     // effect runs. This re-entry point exists only so evidence/README.md's manual loop can
     // be driven from devtools in a browser that doesn't have that extension.
-    (window as unknown as { __vividRegisterTools?: () => () => void }).__vividRegisterTools = () => registerNorthbeamTools(bridge);
-    return registerNorthbeamTools(bridge);
+    (window as unknown as { __vividRegisterTools?: () => () => void }).__vividRegisterTools = registerAll;
+    return registerAll();
   }, [applyChartPatch, applyFilterPatch, sharedStatus]);
 
   const handleUndo = useCallback(() => {
@@ -175,7 +179,7 @@ function RevenueDashboard({ data, report, onChangeReport, session }: { data: Nor
       setUndoNotice('Dashboard changed elsewhere; Undo was cleared.');
       return;
     }
-    void applySharedMutation({ kind: 'undo', actor: 'person', restoreState: frame.state, undoOfVersion: frame.resultingVersion }, false)
+    void applySharedMutation({ kind: 'undo', actor: 'person', restoreState: frame.state as unknown as Record<string, unknown>, undoOfVersion: frame.resultingVersion }, false)
       .then(() => {
         undoStackRef.current = popUndoFrame(undoStackRef.current);
         setUndoStack(undoStackRef.current);
@@ -382,11 +386,11 @@ export default function App() {
     );
   }
 
-  if (report === 'explore') return <ExploreDashboard report={report} onChangeReport={setReport} />;
+  if (report === 'explore') return <ExploreDashboard report={report} onChangeReport={setReport} session={session} />;
 
   if (error) return <div className="northbeam"><div className="error">Failed to load data: {error}</div></div>;
   if (!data) return <div className="northbeam"><div className="loading">Loading Northbeam data…</div></div>;
 
-  if (report === 'usage') return <UsageDashboard data={data.usage} report={report} onChangeReport={setReport} />;
+  if (report === 'usage') return <UsageDashboard data={data.usage} report={report} onChangeReport={setReport} session={session} />;
   return <RevenueDashboard data={data.revenue} report={report} onChangeReport={setReport} session={session} />;
 }

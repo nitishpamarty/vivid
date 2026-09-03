@@ -11,7 +11,20 @@ export {
   type ArrBridgeKnobs, type ChartId, type ChartState, type PatchResult, type RetentionLineKnobs, type SwatchKey,
   type WindowMonths,
 } from './chartValidation.ts';
-import { DEFAULT_CHART_STATE, WINDOW_OPTIONS, type ChartState, type SwatchKey, type WindowMonths } from './chartValidation.ts';
+import { DEFAULT_CHART_STATE, WINDOW_OPTIONS, type ChartId, type ChartState, type SwatchKey, type WindowMonths } from './chartValidation.ts';
+
+// Static chart id -> Cube member name ("<cube>.<field>", matching
+// semanticMetadata.ts's memberName()) so WebMCP tools can hand the agent a
+// key it can pass straight to the semantic-layer tools. Each chart is a
+// derived metric (bridge/trailing-window math over several cube fields, see
+// metrics.ts), not a single Cube measure, so this picks the cube measure
+// that best represents each chart's headline number — a judgment call, not
+// a 1:1 lookup.
+export const CHART_METRIC_KEYS: Record<ChartId, string> = {
+  arr_bridge: 'mrr_monthly.total_mrr',
+  retention_nrr: 'mrr_monthly.total_mrr',
+  retention_churn: 'mrr_monthly.churned_customers',
+};
 
 // ---- whole-dashboard state: the two chart panels' knobs + the report-wide filters ----
 // One persisted/undo unit, since both are "edits to the dashboard" a viewer
@@ -61,7 +74,13 @@ export function subscribeDashboardState(onChange: (state: DashboardState, versio
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'dashboard_state', filter: `room_id=eq.${roomId}` },
-      (payload) => onChange(payload.new.state as DashboardState, Number(payload.new.version)),
+      (payload) => {
+        // The table now also carries `product_usage` rows for the same room
+        // (Phase: Product Usage shared persistence) — ignore updates for any
+        // report id other than this subscription's own.
+        if (payload.new.report_id !== reportId) return;
+        onChange(payload.new.state as DashboardState, Number(payload.new.version));
+      },
     )
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') onStatus?.('subscribed');

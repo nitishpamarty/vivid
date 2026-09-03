@@ -1,5 +1,5 @@
-import type { Department, UsageData } from './types';
-export { monthLabel } from './metrics';
+import type { Department, UsageData } from './types.ts';
+export { monthLabel } from './metrics.ts';
 
 export function monthList(data: UsageData): string[] {
   return [...new Set(data.views.map((r) => r.month))].sort();
@@ -34,7 +34,7 @@ export function avgEngagement(data: UsageData, month: string): number {
 export function topReports(data: UsageData, month: string, n = 5) {
   const nameById = new Map(data.reports.map((r) => [r.reportId, r.name]));
   return viewsIn(data, month)
-    .map((r) => ({ label: nameById.get(r.reportId) ?? r.reportId, value: r.views }))
+    .map((r) => ({ reportId: r.reportId, label: nameById.get(r.reportId) ?? r.reportId, value: r.views }))
     .sort((a, b) => b.value - a.value)
     .slice(0, n);
 }
@@ -79,26 +79,32 @@ export function activityGrid(data: UsageData) {
 }
 export { HOUR_BUCKETS };
 
-export function computeUsageKpis(data: UsageData) {
-  const months = monthList(data);
-  const latest = months[months.length - 1];
-  const latestIdx = months.length - 1;
+// `allMonths`/`asOfMonth` let a caller pass an explicit as-of cutoff (Product
+// Usage's asOfMonth filter) so `latest` stays the *selected* month — never
+// `undefined` — even when `data` has been scoped down to zero matching rows;
+// every metric below degrades to 0 rather than NaN in that case. Defaults
+// preserve the original unfiltered-latest-month behavior.
+export function computeUsageKpis(data: UsageData, allMonths: string[] = monthList(data), asOfMonth: string = allMonths[allMonths.length - 1]) {
+  const latest = asOfMonth;
+  const latestIdx = allMonths.indexOf(latest);
+  const prevMonth = latestIdx > 0 ? allMonths[latestIdx - 1] : undefined;
+  const sparkMonths = latestIdx >= 0 ? allMonths.slice(0, latestIdx + 1).slice(-8) : [];
 
   const views = totalViews(data, latest);
-  const viewsSpark = months.slice(-8).map((m) => totalViews(data, m));
-  const viewsMoM = totalViews(data, months[latestIdx - 1]);
+  const viewsSpark = sparkMonths.map((m) => totalViews(data, m));
+  const viewsMoM = prevMonth ? totalViews(data, prevMonth) : 0;
   const viewsDeltaPct = viewsMoM === 0 ? 0 : ((views - viewsMoM) / viewsMoM) * 100;
 
   const engagement = avgEngagement(data, latest);
-  const engagementMoM = avgEngagement(data, months[latestIdx - 1]);
-  const engagementSpark = months.slice(-8).map((m) => avgEngagement(data, m));
+  const engagementMoM = prevMonth ? avgEngagement(data, prevMonth) : 0;
+  const engagementSpark = sparkMonths.map((m) => avgEngagement(data, m));
 
   const activeReports = activeReportCount(data, latest);
-  const activeReportsSpark = months.slice(-8).map((m) => activeReportCount(data, m));
+  const activeReportsSpark = sparkMonths.map((m) => activeReportCount(data, m));
 
   const uniqueViewers = totalUniqueViewers(data, latest);
-  const uniqueViewersSpark = months.slice(-8).map((m) => totalUniqueViewers(data, m));
-  const uniqueViewersMoM = totalUniqueViewers(data, months[latestIdx - 1]);
+  const uniqueViewersSpark = sparkMonths.map((m) => totalUniqueViewers(data, m));
+  const uniqueViewersMoM = prevMonth ? totalUniqueViewers(data, prevMonth) : 0;
   const uniqueViewersDeltaPct = uniqueViewersMoM === 0 ? 0 : ((uniqueViewers - uniqueViewersMoM) / uniqueViewersMoM) * 100;
 
   return {
@@ -106,6 +112,6 @@ export function computeUsageKpis(data: UsageData) {
     engagement, engagementDeltaPp: engagement - engagementMoM, engagementSpark,
     activeReports, activeReportsSpark,
     uniqueViewers, uniqueViewersDeltaPct, uniqueViewersSpark,
-    latest, months,
+    latest, months: allMonths,
   };
 }

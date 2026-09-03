@@ -6,7 +6,16 @@
 // in ExploreDashboard.tsx, not here — this file only wraps calls and logs
 // them, same division of labor as the Northbeam bridge.
 
-import { COLUMN_TYPES, DATASET_CATALOG, type ColumnType, type ContractResult } from './datasets';
+import {
+  COLUMN_TYPES,
+  DATASET_CATALOG,
+  fetchDatasetAggregate,
+  type ColumnType,
+  type ContractResult,
+} from './datasets';
+import { AggregateQueryError } from './datasets';
+import { createQueryTools } from './registerQueryWebMcpTools.ts';
+import type { NormalizedQueryContract } from './queryContract.ts';
 import { callUnregisterFns } from './webmcpCleanup';
 
 export interface DatasetSchema {
@@ -110,7 +119,7 @@ export function registerExploreTools(bridge: ExploreBridge): () => void {
     ),
     tool(
       'get_chart_contract',
-      'Get the active chart contract (mark, encoding, title) for the connected dataset.',
+      'Get the active versioned chart contract (version, mark, encoding, title, tooltip) for the connected dataset. The contract contains intent only; the app owns data, transforms, config, URLs, and Vega construction.',
       { type: 'object', properties: {} },
       () => {
         const contract = bridge.getContract();
@@ -121,7 +130,7 @@ export function registerExploreTools(bridge: ExploreBridge): () => void {
     ),
     tool(
       'set_chart_contract',
-      'Apply a validated chart contract: { mark, encoding: { x?, y?, color?, theta? }, title? }. Each encoding channel is { field, type, aggregate?, bin? }, field must be one of the active dataset\'s columns. The app owns the actual chart data — data/transform/config/url are not part of the contract and are rejected.',
+      'Apply a validated v1 chart contract: { version?: 1, mark, encoding: { x?, y?, color?, theta? }, title?, tooltip? }. Each encoding channel is { field, type, aggregate?, bin? }, field must be one of the active dataset\'s columns. Arc charts require quantitative theta and cannot use x/y; other marks require x/y and cannot use theta. tooltip is a boolean display knob derived from encoded fields. The app owns actual data, transforms, config, URLs, and Vega construction — raw-spec keys are rejected.',
       { type: 'object', properties: { contract: { type: 'object' } }, required: ['contract'] },
       (input) => {
         const result = bridge.setContract(input.contract);
@@ -131,6 +140,25 @@ export function registerExploreTools(bridge: ExploreBridge): () => void {
       bridge,
     ),
   ];
+
+  const defaultAggregateExecutor = async (query: NormalizedQueryContract): Promise<unknown> => {
+    try {
+      return { ok: true, data: await fetchDatasetAggregate(query) };
+    } catch (error) {
+      // Keep transport/edge-function internals out of the WebMCP response.
+      const reason = error instanceof AggregateQueryError && error.reason === 'limit_exceeded'
+        ? 'limit_exceeded'
+        : 'unavailable';
+      return {
+        ok: false,
+        reason,
+        error: reason === 'limit_exceeded'
+          ? 'The aggregate query exceeds the server limits.'
+          : 'Aggregate query service is unavailable. Try again.',
+      };
+    }
+  };
+  tools.push(...createQueryTools(bridge.logAgent, defaultAggregateExecutor));
 
   const unregisterFns = tools.map((t) => document.modelContext!.registerTool(t));
   return () => callUnregisterFns(unregisterFns);

@@ -1,16 +1,22 @@
 import {
-  CHART_IDS, CHART_OPTIONS, REPORT_ID, findFieldValue, validatePatch,
+  CHART_IDS, CHART_METRIC_KEYS, CHART_OPTIONS, REPORT_ID, findFieldValue, validatePatch,
   type ChartId, type ChartState,
 } from './chartState';
 import { FILTER_OPTIONS, validateFilterPatch, type ReportFilters } from './reportFilters';
-import type { SemanticLayerResult } from './semanticLayerClient';
 import { callUnregisterFns } from './webmcpCleanup';
 
-const REPORT_FIELDS: Record<ChartId, string[]> = {
-  arr_bridge: ['label', 'month', 'delta', 'priorCum', 'newCum', 'positive'],
-  retention_nrr: ['month', 'value'],
-  retention_churn: ['month', 'value'],
+// metricKey is the Cube member ("<cube>.<field>") this chart's headline
+// number corresponds to — pass it straight through to get_business_definitions
+// / query_business_metric to resolve or validate the metric semantically.
+const REPORT_FIELDS: Record<ChartId, { fields: string[]; metricKey: string }> = {
+  arr_bridge: { fields: ['label', 'month', 'delta', 'priorCum', 'newCum', 'positive'], metricKey: CHART_METRIC_KEYS.arr_bridge },
+  retention_nrr: { fields: ['month', 'value'], metricKey: CHART_METRIC_KEYS.retention_nrr },
+  retention_churn: { fields: ['month', 'value'], metricKey: CHART_METRIC_KEYS.retention_churn },
 };
+
+function chartOptionsWithMetricKey(chartId: ChartId) {
+  return { ...CHART_OPTIONS[chartId], metricKey: CHART_METRIC_KEYS[chartId] };
+}
 
 export interface ToolBridge {
   getChartState: () => ChartState;
@@ -20,8 +26,6 @@ export interface ToolBridge {
   getTopAccounts: () => { name: string; arr: number }[];
   getAccountMatches: (query: string) => { name: string; arr: number }[];
   getValidAccountNames: () => readonly string[];
-  getBusinessDefinitions: () => Promise<SemanticLayerResult>;
-  queryBusinessMetric: (query: Record<string, unknown>) => Promise<SemanticLayerResult>;
 }
 
 function tool(name: string, description: string, inputSchema: Record<string, unknown>, run: (input: Record<string, unknown>) => unknown) {
@@ -48,7 +52,7 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
   const tools = [
     tool(
       'get_report_context',
-      'Get the active report id, the current knob state of the two agent-editable charts (ARR bridge, retention NRR/churn), the fields available on each, the active report-wide filters (segment, region, planTier, channel, contractType, accountName) which cross-filter all six panels, and a current top-5 account summary. accountName accepts any exact known customer name; use find_account_values for compact discovery beyond the top five.',
+      'Get the active report id, the current knob state of the two agent-editable charts (ARR bridge, retention NRR/churn), the fields available on each plus its metricKey (the Cube member, e.g. "mrr_monthly.total_mrr", to pass to get_business_definitions/query_business_metric), the active report-wide filters (segment, region, planTier, channel, contractType, accountName) which cross-filter all six panels, and a current top-5 account summary. accountName accepts any exact known customer name; use find_account_values for compact discovery beyond the top five.',
       { type: 'object', properties: {} },
       () => ({
         ok: true,
@@ -60,14 +64,15 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
     ),
     tool(
       'list_report_options',
-      'List the mark/field allow-list for one or all agent-editable charts, plus the allow-list for the report-wide filters — the only values update_chart_spec and set_report_filters will accept.',
+      'List the mark/field allow-list for one or all agent-editable charts (each tagged with its metricKey, the Cube member for get_business_definitions/query_business_metric), plus the allow-list for the report-wide filters — the only values update_chart_spec and set_report_filters will accept.',
       { type: 'object', properties: { chartId: { type: 'string', enum: CHART_IDS } } },
       (input) => {
         const chartId = input.chartId as ChartId | undefined;
         if (chartId && !CHART_IDS.includes(chartId)) {
           return { ok: false, reason: 'unknown_chart', error: `"${chartId}" is not an agent-editable chart. Valid ids: ${CHART_IDS.join(', ')}.` };
         }
-        const charts = chartId ? { [chartId]: CHART_OPTIONS[chartId] } : CHART_OPTIONS;
+        const ids = chartId ? [chartId] : CHART_IDS;
+        const charts = Object.fromEntries(ids.map((id) => [id, chartOptionsWithMetricKey(id)]));
         return { ok: true, data: { charts, filters: FILTER_OPTIONS } };
       },
     ),
@@ -109,18 +114,6 @@ export function registerNorthbeamTools(bridge: ToolBridge): () => void {
         if (!query) return { ok: false, reason: 'invalid_query', error: 'query must be a non-empty customer-name phrase.' };
         return { ok: true, data: { matches: bridge.getAccountMatches(query) } };
       },
-    ),
-    tool(
-      'get_business_definitions',
-      'Get the semantic layer\'s schema: every metric and dimension available across the underlying dataset (MRR, customers, CAC, employees, reports, report views, activity), what each one means, and how the tables relate. Ground an open-ended business question here before answering it or before calling query_business_metric — this is the source of truth for what things mean, separate from the two agent-editable charts.',
-      { type: 'object', properties: {} },
-      () => bridge.getBusinessDefinitions(),
-    ),
-    tool(
-      'query_business_metric',
-      'Run a query against the semantic layer for real numbers behind an open-ended business question — anything outside the two agent-editable charts (e.g. "MRR by region", "report views by owner team"). Pass a Cube query object using measure/dimension names from get_business_definitions: { measures: string[], dimensions?: string[], filters?: object[], timeDimensions?: object[] }.',
-      { type: 'object', properties: { query: { type: 'object' } }, required: ['query'] },
-      (input) => bridge.queryBusinessMetric(input.query as Record<string, unknown>),
     ),
     tool(
       'find_field_values',

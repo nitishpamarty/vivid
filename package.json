@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts",
+    "verify:launch": "node scripts/verify-exploration-launch.mjs",
+    "verify:persistence": "node scripts/verify-exploration-persistence.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

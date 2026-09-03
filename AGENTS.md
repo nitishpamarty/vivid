@@ -170,6 +170,35 @@ more than one.
     customer data ever lands in these tables. The service-role key used to
     seed them is never written to a file — passed inline to
     `scripts/seed-supabase.mjs` only.
+- **Semantic layer (Cube Cloud, built — [supabase/functions/semantic-layer/index.ts](supabase/functions/semantic-layer/index.ts),
+  [src/lib/semanticLayerClient.ts](src/lib/semanticLayerClient.ts),
+  [cube/model/cubes/](cube/model/cubes/)):** Cube models over the same 7
+  Postgres tables Connect Data reads (one YAML file per table), so the agent
+  has real metric definitions (MRR, CAC, customers, employees, reports,
+  report views, activity) to ground an open-ended business question in,
+  instead of guessing at table/column names or writing raw SQL. Two WebMCP
+  tools, registered alongside the rest in
+  [src/lib/registerWebMcpTools.ts](src/lib/registerWebMcpTools.ts):
+  - `get_business_definitions` (read-only) — the Cube schema (`meta`
+    endpoint): every measure/dimension and how the cubes relate. Call this
+    before `query_business_metric` — it's the source of truth for what a
+    metric name means.
+  - `query_business_metric` (read-only) — runs a Cube query
+    (`{ measures, dimensions?, filters?, timeDimensions? }`) against Cube
+    Cloud's `load` endpoint and returns real numbers.
+  - This is deliberately separate from both the two agent-editable charts
+    (`update_chart_spec`) and Connect Data's contract-based charting
+    (`set_chart_contract`) — it answers questions outside either, e.g. "MRR
+    by region" or "report views by owner team," it never renders a chart
+    itself.
+  - The `semantic-layer` Edge Function is a thin proxy: `CUBE_API_URL` and
+    `CUBE_API_TOKEN` are Supabase secrets (never `VITE_`-prefixed, never
+    reach the browser), forwarding `meta`/`query` operations to Cube
+    Cloud's REST API. Originally a self-hosted Cube instance requiring a
+    signed JWT per request (`cube/docker-compose.yml` + `cube/.env`, still
+    there for local schema iteration); switched to Cube Cloud because it
+    issues a ready-to-use bearer token, which removed the JWT-signing step
+    entirely.
 - **Visual design system:** dataviz skill's validated default palette
   (light theme, categorical/status/diverging colors as-is, no
   re-validation needed). Brand accent = series-1 blue `#2a78d6`, hardcoded
@@ -349,12 +378,64 @@ heatmap), cross-filtering all six panels; the `set_report_filters` WebMCP
 tool so the agent can set the same filters; undo/persistence extended to
 cover filter state alongside chart knobs.
 
-**Built (Product Usage, on explicit direction):** a static Activity OS
-surface alongside Revenue, switched via `Topbar.tsx`. It uses a dark,
-activity-oriented treatment with real generated-data pulse, heatmap, monthly
-momentum, top reports, team shares, and engagement spread. It has no WebMCP
-tools, filters, undo, or persistence. The former People report was removed;
-its generated employees dataset remains for Connect Data.
+**Built (Product Usage, on explicit direction):** an Activity OS surface
+alongside Revenue, switched via `Topbar.tsx`. It keeps its dark,
+activity-oriented treatment (pulse strip, heatmap, monthly momentum, top
+reports, team shares, engagement spread) but is now interactive and
+WebMCP-connected like Revenue, using the shared Vivid brand blue as its
+primary accent (cyan/green stay a small supporting range for the heatmap's
+activity states) — see the "Product Usage interactivity" bullet below and
+the "Visual design system" bullet above. The former People report was
+removed; its generated employees dataset remains for Connect Data.
+
+- **Product Usage interactivity (built — [src/lib/usageFilters.ts](src/lib/usageFilters.ts),
+  [src/lib/usageSharedState.ts](src/lib/usageSharedState.ts),
+  [src/lib/registerUsageWebMcpTools.ts](src/lib/registerUsageWebMcpTools.ts),
+  [src/components/UsageDashboard.tsx](src/components/UsageDashboard.tsx)):**
+  its own `UsageFilters`/`UsageDashboardState` contract — deliberately
+  separate from Revenue's `ReportFilters` so Usage-only fields (`ownerTeam`,
+  `reportId`, `asOfMonth`) never leak into the Revenue tool contract or vice
+  versa. `reportId` is validated and stored as the canonical report id;
+  report *names* are a display-only lookup.
+  - `ownerTeam` filters reports by owning team (dropdown, or click a team
+    row in "Where usage comes from" — same toggle-off-to-`all` pattern as
+    Revenue's region/channel clicks). `reportId` narrows to one saved
+    report (dropdown, or click a row in "Reports drawing attention").
+    `asOfMonth` caps every view-based metric (pulse KPIs, momentum,
+    rankings, team shares, engagement spread) to that month and earlier —
+    it has no `all` value, always a real generated month.
+  - The activity heatmap is explicitly **not** filtered by any of the
+    three — it stays the synthetic typical-week aggregate described in the
+    Data spec below, labeled "Typical week · all usage" in the UI so it's
+    never implied to be report/team/date-scoped.
+  - A zero-result filter combination (e.g. a report selected with an
+    `asOfMonth` before its `createdMonth`) degrades to explicit "No usage
+    for this selection" panels — never `NaN`, a broken chart, or a blank
+    page; `computeUsageKpis` always keeps `latest` pinned to the selected
+    `asOfMonth` rather than `undefined`, so KPIs read as calm zeros.
+  - **Shared persistence** reuses Revenue's `dashboard_state`/`activity_log`
+    tables and `shared-state` Edge Function/RPC under a separate,
+    allow-listed `product_usage` report id in the same room — see
+    [supabase/migrations/0006_product_usage_shared_state.sql](supabase/migrations/0006_product_usage_shared_state.sql).
+    Revenue's `chart_patch`/`filter_patch` validation and messages are
+    unchanged; Product Usage gets its own `filter_patch` validation branch
+    (`ownerTeam`/`reportId`/`asOfMonth`) and its own default state/schema
+    version (independent of Revenue's `SCHEMA_VERSION`). `sharedStateProtocol.ts`,
+    `sharedStateClient.ts`, and `undoState.ts` were generalized with a
+    `TState` type parameter so both report surfaces share one wire
+    protocol and one Undo-frame shape without either report's state type
+    leaking into the other's.
+  - **WebMCP**: a dedicated `get_usage_context`/`list_usage_options`/
+    `set_usage_filters`/`find_usage_values` tool set
+    (`registerUsageWebMcpTools.ts`), registered only while the Product
+    Usage tab is active and unregistered on tab switch — never alongside
+    Revenue's `get_report_context`/`update_chart_spec`/etc, and it does not
+    expose raw Vega-Lite chart editing (same "chart-as-data, not
+    chart-as-code" boundary as Revenue's two agent-editable charts).
+  - **Undo** is Person-lane only, scoped to Product Usage edits, reusing
+    the same generalized `UndoFrame`/version-conflict-invalidation pattern
+    as Revenue — agent-triggered undo remains out of scope for both
+    surfaces, unchanged.
 
 **Built (Connect Data, on explicit direction):** a 3rd tab, separate from
 the two report surfaces above — pick a real Postgres table, override a column's
@@ -366,6 +447,14 @@ deliberately **not** the deferred "report-abstraction layer" below: no
   no WebMCP tools added to those reports — it's a distinct, generic
   surface that happens to sit behind a 3rd tab, not a third report.
 
+**Built (Semantic layer, on explicit direction):** Cube Cloud modeling the
+7 Connect Data tables, plus a `get_business_definitions`/
+`query_business_metric` WebMCP tool pair proxied through the
+`semantic-layer` Edge Function. See the Semantic layer bullet under
+"Architecture decisions" above. Read-only — it answers open-ended business
+questions, it does not feed either report surface's charts or Connect
+Data's chart contract.
+
 **Explicitly deferred, do not build without a new decision:**
 - letting the WebMCP tool surface treat any of the four hand-rolled Revenue
   panels as a patchable chart spec — `arr_bridge`/`retention_nrr`/`retention_churn`
@@ -373,8 +462,6 @@ deliberately **not** the deferred "report-abstraction layer" below: no
   cross-filters all six Revenue panels' underlying data, which is a different
   thing from turning the four hand-rolled ones into agent-editable Vega
   specs — that line hasn't moved.
-- WebMCP tools, filters, undo, or persistence for Product Usage — it is
-  intentionally static for now.
 - a general-purpose report-abstraction layer (registry/plugin system) for
   Revenue/Product Usage — two hand-coded report surfaces are still the
   current shape. Connect Data above
