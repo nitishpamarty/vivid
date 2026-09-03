@@ -505,7 +505,5 @@ mutation path at all.
 
 ## Working style note
 
-ponytail is enabled project-scope (see
-[.claude/settings.json](.claude/settings.json)) — default to the smallest
-correct implementation, no speculative abstraction for a future second
-report until there's an actual second report.
+Default to the smallest correct implementation, with no speculative abstraction
+for a future second report until there's an actual second report.

@@ -53,7 +53,6 @@ demo (anyone with the link can edit), not proof of browser-model identity.
   log, and the 7 Connect Data tables
 - Cube Cloud as the semantic layer, reached only through a Supabase Edge
   Function — the API token never reaches the browser
-- [ponytail](.claude/settings.json) plugin active in this repo (project-scoped)
 
 ## Getting started
 
