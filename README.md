@@ -72,17 +72,6 @@ VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable key>
 ```
 
-Apply migrations
-[0002](supabase/migrations/0002_shared_sessions.sql),
-[0003](supabase/migrations/0003_shared_state_rpc.sql), and
-[0006](supabase/migrations/0006_product_usage_shared_state.sql), deploy
-[`shared-state`](supabase/functions/shared-state/index.ts), and add
-`dashboard_state`/`activity_log` to the `supabase_realtime` publication.
-The browser only ever holds a room id + write capability in the URL
-fragment (`#room=...&key=...`) — never persisted server-side. Start from the
-landing page to create a fresh room. Treat links as bearer editor access;
-expiring/cleaning up old rooms is an operator job, not built here.
-
 <details>
 <summary>Optional: Connect Data tables</summary>
 
