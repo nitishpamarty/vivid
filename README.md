@@ -25,6 +25,18 @@ raw chart code. Changes are persisted and shared in real time.
   real metric definitions to answer open-ended questions instead of
   guessing table/column names.
 
+## Why WebMCP
+
+A headless MCP server can hand an agent your data and get a chart back, but
+it never sees the chart it made — there is no shared surface to iterate on.
+WebMCP flips that: the dashboard itself exposes the tools
+(`document.modelContext.registerTool`), so the agent is editing the exact
+chart a person is looking at, live, in the same tab. That turns “agent
+generates a report” into “person and agent tune the same report together”:
+set a filter, ask for a different presentation, watch it change, undo it,
+hand it back — all through one shared surface with one activity log, not a
+one-shot handoff.
+
 ## What's built
 
 | Surface | What it is | Agent can do via WebMCP |
