@@ -2,12 +2,13 @@
 
 **Live demo: [vividdata.pages.dev](https://vividdata.pages.dev)**
 
-A presenter screen-shares a real analytics dashboard on a call. An AI agent
-reshapes the live chart in front of the viewer — through browser-native
-WebMCP tools (`document.modelContext.registerTool`), not a headless MCP
-server, not a vision model. Every change is a validated tool call against
-shared, persisted state (Supabase), visible to everyone on the call in real
-time.
+Vivid is a live analytics workspace where AI agents safely answer business
+questions about your data and adapt live analytics through browser-native
+WebMCP tools (`document.modelContext.registerTool`)—with no headless MCP
+server or vision model. A governed semantic layer grounds metric definitions
+and queries in real business data, while a separate visualization contract lets
+agents update analytics through validated, allow-listed controls rather than
+raw chart code. Changes are persisted and shared in real time.
 
 ## At a glance
 
